@@ -264,6 +264,7 @@ class GenericWorld:
             a.add_event(e.GOT_KILLED)
             for aa in self.active_agents:
                 if aa is not a:
+                    # Aquí no podemos poner KILLED_SELF porque no sabemos qué agente puso la bomba
                     aa.add_event(e.OPPONENT_ELIMINATED)
 
     def end_round(self):
@@ -344,7 +345,7 @@ class BombeRLeWorld(GenericWorld):
             else:
                 name = agent_dir
             self.add_agent(agent_dir, name, train=train)
-
+     #important function
     def build_arena(self):
         WALL = -1
         FREE = 0

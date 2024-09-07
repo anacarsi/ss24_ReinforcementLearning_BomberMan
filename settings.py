@@ -5,13 +5,15 @@ from fallbacks import pygame
 
 # Game properties
 # board size (a smaller board may be useful at the beginning)
-COLS = 17
-ROWS = 17
+# COLS = 17
+# ROWS = 17
+COLS = 7
+ROWS = 7
 SCENARIOS = {
     # modes useful for agent development
 	"empty": {
         "CRATE_DENSITY": 0, 
-        "COIN_COUNT": 0 
+        "COIN_COUNT": 0
     },
     "coin-heaven": {
         "CRATE_DENSITY": 0,
@@ -25,14 +27,24 @@ SCENARIOS = {
     "classic": {
         "CRATE_DENSITY": 0.75,
         "COIN_COUNT": 9
-    }
+    },
     # Feel free to add more game modes and properties
     # game is created in environment.py -> BombeRLeWorld -> build_arena()
+
+
+    #custom
+    "1_goal": {
+        "CRATE_DENSITY": 0, 
+        "COIN_COUNT": 1
+    },
 }
-MAX_AGENTS = 4
+
+# Agent properties
+# default 4
+MAX_AGENTS = 1
 
 # Round properties
-MAX_STEPS = 400
+MAX_STEPS = 1000
 
 # GUI properties
 GRID_SIZE = 30
@@ -45,7 +57,8 @@ ASSET_DIR = Path(__file__).parent / "assets"
 AGENT_COLORS = ['blue', 'green', 'yellow', 'pink']
 
 # Game rules
-BOMB_POWER = 3
+# default 3
+BOMB_POWER = 1
 BOMB_TIMER = 4
 EXPLOSION_TIMER = 2  # = 1 of bomb explosion + N of lingering around
 
