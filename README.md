@@ -2,7 +2,8 @@
 Repository for the implementation of a reinforcement learning agent for the game of Bomber Man. 
 # Bomberman Reinforcement Learning Agent
 
-![Bomberman RL](./images/cover-image.png) 
+![Bomberman RL](./images/cover-image.png){:height="300px" width="300px"} 
+## Project Description
 
 ## Project Description
 
