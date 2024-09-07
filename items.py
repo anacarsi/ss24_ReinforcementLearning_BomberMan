@@ -19,7 +19,7 @@ class Item(object):
 
 
 class Coin(Item):
-    avatar = pygame.image.load(s.ASSET_DIR / 'coin.png')
+    avatar = pygame.image.load(s.ASSET_DIR / "coin.png")
 
     def __init__(self, pos, collectable=False):
         super(Coin, self).__init__()
@@ -32,7 +32,10 @@ class Coin(Item):
 
 
 class Bomb(Item):
-    DEFAULT_AVATARS = {color: pygame.image.load(s.ASSET_DIR / f'bomb_{color}.png') for color in s.AGENT_COLORS}
+    DEFAULT_AVATARS = {
+        color: pygame.image.load(s.ASSET_DIR / f"bomb_{color}.png")
+        for color in s.AGENT_COLORS
+    }
 
     def __init__(self, pos, owner, timer, power, bomb_sprite):
         super(Bomb, self).__init__()
@@ -74,8 +77,8 @@ class Bomb(Item):
 
 class Explosion(Item):
     ASSETS = [
-        [pygame.image.load(s.ASSET_DIR / f'explosion_{i}.png') for i in range(4)],
-        [pygame.image.load(s.ASSET_DIR / f'smoke_{i}.png') for i in range(2)]
+        [pygame.image.load(s.ASSET_DIR / f"explosion_{i}.png") for i in range(4)],
+        [pygame.image.load(s.ASSET_DIR / f"smoke_{i}.png") for i in range(2)],
     ]
 
     def __init__(self, blast_coords, screen_coords, owner, timer):
@@ -97,8 +100,10 @@ class Explosion(Item):
             self.stage = None
 
     def render(self, screen, **kwargs):
-        img = pygame.transform.rotate(Explosion.ASSETS[self.stage][self.timer - 1], (-50 * time()) % 360)
+        img = pygame.transform.rotate(
+            Explosion.ASSETS[self.stage][self.timer - 1], (-50 * time()) % 360
+        )
         rect = img.get_rect()
-        for (x, y) in self.screen_coords:
+        for x, y in self.screen_coords:
             rect.center = x + 15, y + 15
             screen.blit(img, rect.topleft)

@@ -1,0 +1,13 @@
+python main.py
+
+Then as args:
+
+
+play # to play normally
+play --nogui # to simulate
+
+play --my-agent my_agent --train 0
+play --my-agent first_agent --train 1
+--n-rounds 10000
+
+python main.py play --scenario coin-heaven --agents first_agent --n-rounds 10000

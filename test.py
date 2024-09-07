@@ -15,5 +15,5 @@ class MainTestCase(unittest.TestCase):
         self.assertGreater(os.path.getmtime("logs/game.log"), start_time)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
