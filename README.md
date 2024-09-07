@@ -1,12 +1,10 @@
 # ss24_ReinforcementLearning_BomberMan
-Repository for the implementation of a reinforcement learning agent for the game of Bomber Man. 
+Repository for the implementation of a reinforcement learning agent for the game of Bomber Man for the subject on Machine Learning Essentials at Heidelberg University. 
 # Bomberman Reinforcement Learning Agent
 
 <div align="center">
-    <img src="./images/cover-image.png" alt="Bomberman RL" width="200" height="200"/>
+    <img src="./images/cover-image.png" alt="Bomberman RL" width="300" height="300"/>
 </div>
-
-## Project Description
 
 ## Project Description
 
