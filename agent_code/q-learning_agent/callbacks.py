@@ -7,10 +7,6 @@ from . import hyperparameters as hyp
 
 ACTIONS = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'WAIT', 'BOMB']
 
-
-COLS = 7
-ROWS = 7
-
 def setup(self):
     """
     Setup your code. This is called once when loading each agent.
@@ -27,7 +23,7 @@ def setup(self):
     """
 
     #HYPERPARAMETERS
-    hyp.playing_hyperparameters(self)
+    hyp.training_hyperparameters(self)
 
     
     self.logger.info("Loading q-table from saved state.")
@@ -50,20 +46,13 @@ def act(self, game_state: dict) -> str:
     field = a.build_field(self, game_state)
     can_place_bomb = game_state['self'][2]
 
-    player_pos = game_state['self'][3] 
-    player_x,player_y = player_pos
+    explosions = a.bomb_map(self, game_state)
 
-    #at the moment coin or crate. Later it should also handle objective if there is nothing to collect or kill.
-    nearest_objective = a.set_objetive(self, game_state)
-    cur_dist_to_objective = (nearest_objective[0] - player_x, nearest_objective[1]-player_y)
-    
-    up_state = field[player_x,player_y-1]
-    down_state = field[player_x,player_y+1]
-    left_state = field[player_x-1,player_y]
-    right_state = field[player_x+1,player_y]
+    vision1 = a.agent_vision(self, field, game_state['self'][3], hyp.VISION_RANGE)
+    vision2 = a.agent_vision(self, explosions, game_state['self'][3], hyp.VISION_RANGE)
 
-
-    self.state = (cur_dist_to_objective, up_state,down_state,left_state,right_state,can_place_bomb)
+    self.state = (vision1.tobytes(), vision2.tobytes(), can_place_bomb)
+    print(self.q_table.shape)
 
     #epsilon-greedy strategy
     if np.random.random() > self.epsilon:
@@ -71,5 +60,5 @@ def act(self, game_state: dict) -> str:
     else:
         action = np.random.randint(0, 6)
     self.action = action 
-
+    
     return ACTIONS[self.action]

@@ -1,0 +1,16 @@
+2024-08-29 15:47:29,766 [tpl_agent_code] INFO: Setting up model from scratch.
+2024-08-29 15:47:29,808 [tpl_agent_code] DEBUG: Querying model for action.
+2024-08-29 15:47:29,809 [tpl_agent_code] DEBUG: Encountered game event(s) 'BOMB_DROPPED' in step 1
+2024-08-29 15:47:29,809 [tpl_agent_code] INFO: Awarded -0.1 for events BOMB_DROPPED, PLACEHOLDER
+2024-08-29 15:47:29,905 [tpl_agent_code] DEBUG: Querying model for action.
+2024-08-29 15:47:29,906 [tpl_agent_code] DEBUG: Encountered game event(s) 'WAITED' in step 2
+2024-08-29 15:47:29,906 [tpl_agent_code] INFO: Awarded -0.1 for events WAITED, PLACEHOLDER
+2024-08-29 15:47:30,007 [tpl_agent_code] DEBUG: Querying model for action.
+2024-08-29 15:47:30,007 [tpl_agent_code] DEBUG: Encountered game event(s) 'INVALID_ACTION' in step 3
+2024-08-29 15:47:30,007 [tpl_agent_code] INFO: Awarded -0.1 for events INVALID_ACTION, PLACEHOLDER
+2024-08-29 15:47:30,106 [tpl_agent_code] DEBUG: Querying model for action.
+2024-08-29 15:47:30,107 [tpl_agent_code] DEBUG: Encountered game event(s) 'WAITED' in step 4
+2024-08-29 15:47:30,107 [tpl_agent_code] INFO: Awarded -0.1 for events WAITED, PLACEHOLDER
+2024-08-29 15:47:30,208 [tpl_agent_code] DEBUG: Querying model for action.
+2024-08-29 15:47:30,208 [tpl_agent_code] DEBUG: Encountered event(s) 'INVALID_ACTION', 'BOMB_EXPLODED', 'KILLED_SELF', 'GOT_KILLED' in final step
+2024-08-29 15:47:30,209 [tpl_agent_code] INFO: Awarded 0 for events INVALID_ACTION, BOMB_EXPLODED, KILLED_SELF, GOT_KILLED

@@ -11,12 +11,13 @@ def set_objetive(self, game_state: dict):
     Returns:
     - objective: The objective for the agent, which can be a crate or a coin.
     """
-    field = game_state['field']
-    coin_array=game_state['coins']
+    # probably "copy" can be deleted, but still not sure if it is passed by reference or by value.
+    field = game_state['field'].copy()
+    coin_array=game_state['coins'].copy()
     player_pos = game_state['self'][3]
 
     if not coin_array:
-        crates = np.argwhere(field == -2) #probar que esto nos da correctamente los crates o solamente una e las coordenadas.
+        crates = np.argwhere(field == -2)
         if not np.any(crates):
             objective = player_pos
         else:
@@ -52,56 +53,59 @@ def bomb_map(self, game_state: dict)->np.ndarray:
     The timer value of a tile is updated if a bomb with a shorter timer is found.
     The bomb map is returned as a 2D array.
     """
-    field = game_state['field']
+    field = game_state['field'].copy()
 
     #adjust size of the bomb map to the field size
-    bomb_map = np.full((7,7), 6)
-    bombs = game_state['bombs']
-    if bombs:
-        for bomb in game_state['bombs']:
-            bomb_center_x, bomb_center_y = bomb[0][0], bomb[0][1]
-            #print(bomb[0])
-            bomb_timer = bomb[1] + 1
-            #affected tiles classic scenario
-            #affected_tiles_up = [(bomb_center_x, bomb_center_y-1), (bomb_center_x, bomb_center_y-2), (bomb_center_x, bomb_center_y-3)]
-            #affected_tiles_down = [(bomb_center_x, bomb_center_y-1), (bomb_center_x, bomb_center_y-2), (bomb_center_x, bomb_center_y-3)]
-            #affected_tiles_left = [(bomb_center_x-1, bomb_center_y), (bomb_center_x-2, bomb_center_y), (bomb_center_x-3, bomb_center_y)]
-            #affected_tiles_right = [(bomb_center_x+1, bomb_center_y), (bomb_center_x+2, bomb_center_y), (bomb_center_x+3, bomb_center_y)]
-            
-            #affected tiles 1-goal scenario
-            #We consider in affected_tiles_up the bomb center and in the rest not.
-            affected_tiles_up = [(bomb_center_x, bomb_center_y),(bomb_center_x, bomb_center_y-1)]
-            affected_tiles_down = [(bomb_center_x, bomb_center_y+1)]
-            affected_tiles_left = [(bomb_center_x-1, bomb_center_y)]
-            affected_tiles_right = [(bomb_center_x+1, bomb_center_y)]
+    bomb_map = np.full((self.rows,self.cols), -1)
+    bombs = game_state['bombs'].copy()
+    
+    for bomb in bombs:
+        bomb_center_x, bomb_center_y = bomb[0][0], bomb[0][1]
+        bomb_timer = bomb[1] + 1
+        
+        #affected tiles classic scenario
+        #affected_tiles_up = [(bomb_center_x, bomb_center_y-1), (bomb_center_x, bomb_center_y-2), (bomb_center_x, bomb_center_y-3)]
+        #affected_tiles_down = [(bomb_center_x, bomb_center_y-1), (bomb_center_x, bomb_center_y-2), (bomb_center_x, bomb_center_y-3)]
+        #affected_tiles_left = [(bomb_center_x-1, bomb_center_y), (bomb_center_x-2, bomb_center_y), (bomb_center_x-3, bomb_center_y)]
+        #affected_tiles_right = [(bomb_center_x+1, bomb_center_y), (bomb_center_x+2, bomb_center_y), (bomb_center_x+3, bomb_center_y)]
+        
+        #affected tiles 1-goal scenario
+        #We consider in affected_tiles_up the bomb center and in the rest not.
+        affected_tiles_up = [(bomb_center_x, bomb_center_y),(bomb_center_x, bomb_center_y-1)]
+        affected_tiles_down = [(bomb_center_x, bomb_center_y+1)]
+        affected_tiles_left = [(bomb_center_x-1, bomb_center_y)]
+        affected_tiles_right = [(bomb_center_x+1, bomb_center_y)]
 
-            for tile in affected_tiles_up:
-                if field[tile] == -1:
-                    break
-                timer_tile = bomb_map[tile] 
-                bomb_map[tile] = bomb_timer if (timer_tile > bomb_timer) else timer_tile
+        for tile in affected_tiles_up:
+            if field[tile] == -1:
+                break
+            timer_tile = bomb_map[tile] 
+            bomb_map[tile] = bomb_timer 
+            # bomb_map[tile] = bomb_timer if (timer_tile > bomb_timer) else timer_tile
 
-            for tile in affected_tiles_down:
-                if field[tile] == -1:
-                    break
-                timer_tile = bomb_map[tile]
-                bomb_map[tile] = bomb_timer if (timer_tile > bomb_timer) else timer_tile
+        for tile in affected_tiles_down:
+            if field[tile] == -1:
+                break
+            timer_tile = bomb_map[tile]
+            bomb_map[tile] = bomb_timer #if (timer_tile > bomb_timer) else timer_tile
 
-            for tile in affected_tiles_left:
-                if field[tile] == -1:
-                    break
-                timer_tile = bomb_map[tile]
-                bomb_map[tile] = bomb_timer if (timer_tile > bomb_timer) else timer_tile
+        for tile in affected_tiles_left:
+            if field[tile] == -1:
+                break
+            timer_tile = bomb_map[tile]
+            bomb_map[tile] = bomb_timer #if (timer_tile > bomb_timer) else timer_tile
 
-            for tile in affected_tiles_right:
-                if field[tile] == -1:
-                    break
-                timer_tile = bomb_map[tile]
-                bomb_map[tile] = bomb_timer if (timer_tile > bomb_timer) else timer_tile
-    else:
-        bomb_map = np.full((7,7), 0)
+        for tile in affected_tiles_right:
+            if field[tile] == -1:
+                break
+            timer_tile = bomb_map[tile]
+            bomb_map[tile] = bomb_timer #if (timer_tile > bomb_timer) else timer_tile
 
+    explosion_map = game_state['explosion_map'].copy()
+
+    bomb_map[explosion_map == 1] = 1
     return bomb_map
+
 
 def build_field(self, game_state: dict):
     """
@@ -111,32 +115,50 @@ def build_field(self, game_state: dict):
     - game_state (dict): The dictionary containing the game state.
     Returns:
     - field (numpy.ndarray): The built game field.
-    The function builds the game field by adjusting the scale of crates to -2, coins to -3, 
-    and adjusting the field to show the countdown to explosions [4,3,2,1] and 1 for explosion,
-    and 0 being free space.
+    The function builds the game field by adjusting the scale of crates to 1, coins to 3, 
+    bombs to 2, and free spaces to 0.
     The function returns the built game field.
     """
-    field = game_state['field']
-    bombmap = bomb_map(self, game_state)
-    explosion_map = game_state['explosion_map']
+    field = game_state['field'].copy()
     
-    # adjust scale of crates to -2
-    field[field == 1] = -2 
+    for (coords, value) in game_state['bombs'].copy():
+        field[coords] = 2  
 
-    # explosions are present two steps. explosion map shows the second step of the explosion.
-    field[explosion_map == 1] = 1
-
-    # adjust field to show countdown to explosions (1 being just exploded)
-    cond = ((bombmap == 4) | (bombmap == 3) | (bombmap == 2) | (bombmap == 1))
-    field[cond] = bombmap[cond]
-
-    objective = set_objetive(self, game_state)
-    if (objective in game_state['coins']) and (field[objective] != 0,1,2,3,4):
-        field[objective] = -3
+    coin_map = game_state['coins'].copy()
+    for coin in coin_map:
+        field[coin] = 3
     return field
 
 
-    
+def agent_vision(self, field: np.ndarray, player_pos: tuple, radius: int = 3):
+    """
+    Generates the agent's vision based on the field and player position.
+    Parameters:
+    - self: The instance of the class.
+    - field (numpy.ndarray): The game field.
+    - player_pos (tuple): The player position.
+    Returns:
+    - vision (numpy.ndarray): The agent's vision.
+    The function generates the agent's vision by creating a 3x3 grid centered around the player position.
+    The function returns the agent's vision.
+    """
+    vision = np.zeros((2*radius+1, 2*radius+1))    
+
+    left = player_pos[0] - radius
+    left = 0 if left < 0 else left
+    right = player_pos[0] + radius
+    right = field.shape[0] if right >= field.shape[0] else right 
+    up = player_pos[1] - radius
+    up = 0 if up < 0 else up
+    down = player_pos[1] + radius
+    down = field.shape[1] if down >= field.shape[1] else down
+
+    for i in range(left, right):
+        for j in range(up, down):
+            vision[i-left, j-up] = field[i, j]
+
+    return vision
+
 
 def calculate_dist_to_obj(player_pos, objective_pos, field):
     """
