@@ -4,36 +4,36 @@ import networkx as nx
 def set_objetive(self, game_state: dict):
     """
     TO BE MADE BETTER SO THAT IT CHOOSES THE NEAREST OBJECTIVE.
-    S
     Sets the objective for the agent based on the game state.
     Parameters:
     - game_state (dict): The current game state containing the field and coin information.
     Returns:
     - objective: The objective for the agent, which can be a crate or a coin.
     """
+    #DETERMINISTIC. NOT VERY USEFUL FOR LEARNING
+
     # probably "copy" can be deleted, but still not sure if it is passed by reference or by value.
     field = game_state['field'].copy()
     coin_array=game_state['coins'].copy()
     player_pos = game_state['self'][3]
 
+    #to be made better so that it chooses the nearest objective instead of the 
+    #first in the possible objectives.
     if not coin_array:
-        crates = np.argwhere(field == -2)
+        crates = np.argwhere(field == 1)
         if not np.any(crates):
-            objective = player_pos
-        else:
-            objective = crates[0]
-        #to be refined in this way in the future. Now we will always have a crate or a coin.
-
-        #no coins in the field. Set new objetcive to the nearest crate.
-        #crates = np.argwhere(field == 1)
-        #if not crates:
             #no crates in the field. Set new objetcive to the nearest opponent.
-
-            #NEW OBJETCTIVE NOT REALLY SET. IT SHOULD BE TO KILL NEAREST OPPONENT!
-        #    other_agents = game_state['others']
-        #else:
-        #    nearest_crate = crates[0]
+            opponents = game_state['others']
+            if opponents:
+                objective = opponents[0][3]
+            else:
+                #no objective. Go to the center of the field to have highest vision.
+                objective = (0,0)
+        else:
+            #no coins in the field. Set new objetcive to the nearest crate.
+            objective = crates[0]
     else:
+        #there are coins. Set new objetcive to the nearest coin.
         objective = coin_array[0]
     
     return tuple(objective)
@@ -127,6 +127,11 @@ def build_field(self, game_state: dict):
     coin_map = game_state['coins'].copy()
     for coin in coin_map:
         field[coin] = 3
+
+    oppponents = game_state['others'].copy()
+    for opp in oppponents:
+        field[opp[3]] = 4
+    
     return field
 
 
@@ -137,68 +142,41 @@ def agent_vision(self, field: np.ndarray, player_pos: tuple, radius: int = 3):
     - self: The instance of the class.
     - field (numpy.ndarray): The game field.
     - player_pos (tuple): The player position.
+    - radius (int): The vision radius around the player (default is 3).
+    
     Returns:
     - vision (numpy.ndarray): The agent's vision.
-    The function generates the agent's vision by creating a 3x3 grid centered around the player position.
-    The function returns the agent's vision.
+    
+    The function generates the agent's vision by creating a (2*radius+1)x(2*radius+1) grid centered 
+    around the player position. If the player is near the boundary, vision is clipped accordingly.
     """
+    #left = max(player_pos[0] - radius, 0)
+    #right = min(player_pos[0] + radius, field.shape[0] - 1)
+    #up = max(player_pos[1] - radius, 0)
+    #down = min(player_pos[1] + radius, field.shape[1] - 1)
+    #vision = np.full((2*radius+1, 2*radius+1), -1)    
+    #for i in range(left, right):
+    #    for j in range(up, down):
+    #        vision[i-left, j-up] = field[i, j]
+    #return vision
+ 
     vision = np.zeros((2*radius+1, 2*radius+1))    
 
     left = player_pos[0] - radius
-    left = 0 if left < 0 else left
-    right = player_pos[0] + radius
-    right = field.shape[0] if right >= field.shape[0] else right 
+    right = player_pos[0] + radius 
     up = player_pos[1] - radius
-    up = 0 if up < 0 else up
     down = player_pos[1] + radius
-    down = field.shape[1] if down >= field.shape[1] else down
 
-    for i in range(left, right):
-        for j in range(up, down):
-            vision[i-left, j-up] = field[i, j]
+    for i in range(left, right+1):
+        for j in range(up, down+1):
+            if i < 0 or i >= field.shape[0] or j < 0 or j >= field.shape[1]:
+                vision[i-left, j-up] = -1
+            else:
+                vision[i-left, j-up] = field[i, j]
 
     return vision
 
 
-def calculate_dist_to_obj(player_pos, objective_pos, field):
-    """
-    Calculates the path to the objective using Dijkstra's algorithm.
-    Returns the path to the coin.
-    """
-    # Create a grid of ones and zeros
-    # 0 represents a wall, 1 represents a free space
-    grid = np.zeros(field.shape)
-    grid[field == -1] = 2  # Wall (not passable)
-    grid[field == -2] = 80  # Crate (not passable)
-    #to afjust when we change size of the field
-    grid[field == 0] = 100
-    grid[field == 3] = 85
-    grid[field == 4] = 90
-    grid[field == 5] = 95
-    grid[field == 1] = 0
-    grid[field == 2] = 0
-    
-    # Create a graph from the grid
-    graph = nx.grid_2d_graph(grid.shape[0], grid.shape[1])
-    
-    # Remove nodes that represent walls
-    walls = np.argwhere(grid == 2)
-    for wall in walls:
-        graph.remove_node(tuple(wall))
-
-
-    # Find the start node
-    start = tuple(player_pos)
-
-    # Find the path to the coin
-    try:
-        path = nx.shortest_path(graph, start, tuple(objective_pos), method='dijkstra')
-    except nx.NetworkXNoPath:
-        # No path found to this coin
-        path = []
-
-    return path
- 
 def dijkstra(player_pos, objective_pos, field):
     """
     Calculates the path to the objective using Dijkstra's algorithm.
@@ -216,19 +194,14 @@ def dijkstra(player_pos, objective_pos, field):
     grid[field == 3] = 1
     grid[field == 4] = 1
     grid[field == -3] = 1
-    
     # Create a graph from the grid
     graph = nx.grid_2d_graph(grid.shape[0], grid.shape[1])
-    
     # Remove nodes that represent walls
     walls = np.argwhere(grid == 0)
     for wall in walls:
         graph.remove_node(tuple(wall))
-
-
     # Find the start node
     start = tuple(player_pos)
-
     # Find the path to the coin
     try:
         path = nx.shortest_path(graph, start, tuple(objective_pos), method='dijkstra')

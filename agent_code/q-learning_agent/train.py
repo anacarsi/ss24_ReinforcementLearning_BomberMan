@@ -44,7 +44,6 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     new_can_place_bomb = new_game_state['self'][2]
     new_expl_map = a.bomb_map(self, new_game_state)
     new_player_pos_x, new_player_pos_y = new_game_state['self'][3]
-
     new_vision1 = a.agent_vision(self, new_field, (new_player_pos_x, new_player_pos_y), hyp.VISION_RANGE)
     new_vision2 = a.agent_vision(self, new_expl_map, (new_player_pos_x, new_player_pos_y), hyp.VISION_RANGE)
 
@@ -58,7 +57,25 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         reward += 1
     if "COIN_COLLECTED" in events:
         reward += 10
-        
+    if "KILLED_OPPONENT" in events:
+        reward += 10
+
+    #IT WONT KNOW WHY IT IS BEING PENALIZED. I NEED TO PUT IT INTO THE STATES BUT THEN THEY ARE TOO BIG.
+    steps_in_pos = 0
+    last_pos = old_game_state['self'][3]
+    pos = new_game_state['self'][3]
+    # if it does the same action 3 times in a row, it gets a negative reward otherwise counter restarts
+    if last_pos == pos:
+        steps_in_pos += 1
+    else:
+        steps_in_pos = 0
+    # the problem is that it will still not recognize loops like left-right left-right, 
+    # etc but to recognize this we would need to store pre-old position and we will not be able to have 
+    # this in the contest.
+    if steps_in_pos > 3:
+        reward += -1
+
+
     #UPDATE Q-TABLE
     max_future_q = np.max(self.q_table.get(new_state, [-10] * 6))
     old_q = self.q_table.get(self.state, [-10] * 6)[self.action]

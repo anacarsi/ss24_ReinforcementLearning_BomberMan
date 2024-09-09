@@ -1,6 +1,6 @@
 
-ROWS = 9
-COLS = 9
+ROWS = 7
+COLS = 7
 VISION_RANGE = 4
 def training_hyperparameters(self):
     # Start with high exploration rate 

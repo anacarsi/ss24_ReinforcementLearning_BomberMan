@@ -52,7 +52,7 @@ def act(self, game_state: dict) -> str:
     vision2 = a.agent_vision(self, explosions, game_state['self'][3], hyp.VISION_RANGE)
 
     self.state = (vision1.tobytes(), vision2.tobytes(), can_place_bomb)
-    print(self.q_table.shape)
+    
 
     #epsilon-greedy strategy
     if np.random.random() > self.epsilon:
@@ -61,4 +61,4 @@ def act(self, game_state: dict) -> str:
         action = np.random.randint(0, 6)
     self.action = action 
     
-    return ACTIONS[self.action]
+    return ACTIONS[action]
