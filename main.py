@@ -5,13 +5,31 @@ from time import sleep, time
 from tqdm import tqdm
 
 import settings as s
+import logging
 from environment import BombeRLeWorld, GUI
 from fallbacks import pygame, LOADED_PYGAME
 from replay import ReplayWorld
 
 ESCAPE_KEYS = (pygame.K_q, pygame.K_ESCAPE)
 
+# Configure logging
+logger = logging.getLogger('main_logger')
+logger.setLevel(logging.DEBUG)  # Set the desired logging level
 
+log_dir = os.path.dirname(os.path.abspath(__file__)) + "/logs"
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
+handler = logging.FileHandler(f'{log_dir}/main.log', mode="w")
+handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s [%(name)s] %(levelname)s: %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+logger.info('Initialized logger for main.py')
+
+
+# Class for timing the game loop.
 class Timekeeper:
     def __init__(self, interval):
         self.interval = interval
@@ -28,7 +46,7 @@ class Timekeeper:
             duration = self.next_time - time()
             sleep(duration)
 
-
+# Main game loop
 def world_controller(world, n_rounds, *,
                      gui, every_step, turn_based, make_video, update_interval):
     if make_video and not gui.screenshot_dir.exists():
@@ -38,6 +56,7 @@ def world_controller(world, n_rounds, *,
 
     def render(wait_until_due):
         # If every step should be displayed, wait until it is due to be shown
+        logger.debug("Rendering GUI frame.")
         if wait_until_due:
             gui_timekeeper.wait()
 
@@ -48,7 +67,8 @@ def world_controller(world, n_rounds, *,
             pygame.display.flip()
 
     user_input = None
-    for _ in tqdm(range(n_rounds)):
+    for _ in tqdm(range(n_rounds)): # tqdm to display a progress bar
+        logger.info(f"Starting a new round...")
         world.new_round()
         while world.running:
             # Only render when the last frame is not too old
@@ -56,7 +76,9 @@ def world_controller(world, n_rounds, *,
                 render(every_step)
 
                 # Check GUI events
+                logger.debug("Checking GUI events.")
                 for event in pygame.event.get():
+                    logger.info(f"Detected event: {event}")
                     if event.type == pygame.QUIT:
                         return
                     elif event.type == pygame.KEYDOWN:
@@ -68,6 +90,7 @@ def world_controller(world, n_rounds, *,
 
             # Advances step (for turn based: only if user input is available)
             if world.running and not (turn_based and user_input is None):
+                logger.debug("Advancing to the next step.")
                 world.do_step(user_input)
                 user_input = None
             else:
@@ -76,6 +99,7 @@ def world_controller(world, n_rounds, *,
 
         # Save video of last game
         if make_video:
+            logger.info("Saving video of the last game.")
             gui.make_video()
 
         # Render end screen until next round is queried
@@ -91,6 +115,7 @@ def world_controller(world, n_rounds, *,
                         if key_pressed in s.INPUT_MAP or key_pressed in ESCAPE_KEYS:
                             do_continue = True
 
+    logger.info("Ending the world.")
     world.end()
 
 
@@ -148,11 +173,14 @@ def main(argv = None):
 
     has_gui = not args.no_gui
     if has_gui:
-        if not LOADED_PYGAME:
+        logger.info("Launching GUI.") if has_gui else logger.info("Running in no-GUI mode.")
+        if not LOADED_PYGAME: # Check if pygame is available
+            logger.error("pygame could not be loaded, cannot run with GUI")
             raise ValueError("pygame could not loaded, cannot run with GUI")
 
     # Initialize environment and agents
     if args.command_name == "play":
+        logger.info("Initializing environment and agents.")
         agents = []
         if args.train == 0 and not args.continue_without_training:
             args.continue_without_training = True
@@ -173,6 +201,7 @@ def main(argv = None):
     # Launch GUI
     if has_gui:
         gui = GUI(world)
+        logger.info("GUI initialized successfully.")
     else:
         gui = None
     world_controller(world, args.n_rounds,
