@@ -34,8 +34,8 @@ SCENARIOS = {
 
     #custom
     "1_goal": {
-        "CRATE_DENSITY": 0.1,
-        "COIN_COUNT": 3
+        "CRATE_DENSITY": 0.2,
+        "COIN_COUNT": 4
     },
 }
 

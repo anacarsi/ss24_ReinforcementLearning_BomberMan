@@ -1,43 +1,4 @@
 import numpy as np
-import networkx as nx
-
-def set_objetive(self, game_state: dict):
-    """
-    TO BE MADE BETTER SO THAT IT CHOOSES THE NEAREST OBJECTIVE.
-    Sets the objective for the agent based on the game state.
-    Parameters:
-    - game_state (dict): The current game state containing the field and coin information.
-    Returns:
-    - objective: The objective for the agent, which can be a crate or a coin.
-    """
-    #DETERMINISTIC. NOT VERY USEFUL FOR LEARNING
-
-    # probably "copy" can be deleted, but still not sure if it is passed by reference or by value.
-    field = game_state['field'].copy()
-    coin_array=game_state['coins'].copy()
-    player_pos = game_state['self'][3]
-
-    #to be made better so that it chooses the nearest objective instead of the 
-    #first in the possible objectives.
-    if not coin_array:
-        crates = np.argwhere(field == 1)
-        if not np.any(crates):
-            #no crates in the field. Set new objetcive to the nearest opponent.
-            opponents = game_state['others']
-            if opponents:
-                objective = opponents[0][3]
-            else:
-                #no objective. Go to the center of the field to have highest vision.
-                objective = (0,0)
-        else:
-            #no coins in the field. Set new objetcive to the nearest crate.
-            objective = crates[0]
-    else:
-        #there are coins. Set new objetcive to the nearest coin.
-        objective = coin_array[0]
-    
-    return tuple(objective)
-
 
 def bomb_map(self, game_state: dict)->np.ndarray:
     
@@ -79,7 +40,6 @@ def bomb_map(self, game_state: dict)->np.ndarray:
         for tile in affected_tiles_up:
             if field[tile] == -1:
                 break
-            timer_tile = bomb_map[tile] 
             bomb_map[tile] = bomb_timer 
             # bomb_map[tile] = bomb_timer if (timer_tile > bomb_timer) else timer_tile
 
@@ -150,16 +110,6 @@ def agent_vision(self, field: np.ndarray, player_pos: tuple, radius: int = 3):
     The function generates the agent's vision by creating a (2*radius+1)x(2*radius+1) grid centered 
     around the player position. If the player is near the boundary, vision is clipped accordingly.
     """
-    #left = max(player_pos[0] - radius, 0)
-    #right = min(player_pos[0] + radius, field.shape[0] - 1)
-    #up = max(player_pos[1] - radius, 0)
-    #down = min(player_pos[1] + radius, field.shape[1] - 1)
-    #vision = np.full((2*radius+1, 2*radius+1), -1)    
-    #for i in range(left, right):
-    #    for j in range(up, down):
-    #        vision[i-left, j-up] = field[i, j]
-    #return vision
- 
     vision = np.zeros((2*radius+1, 2*radius+1))    
 
     left = player_pos[0] - radius
@@ -175,38 +125,3 @@ def agent_vision(self, field: np.ndarray, player_pos: tuple, radius: int = 3):
                 vision[i-left, j-up] = field[i, j]
 
     return vision
-
-
-def dijkstra(player_pos, objective_pos, field):
-    """
-    Calculates the path to the objective using Dijkstra's algorithm.
-    Returns the path to the coin.
-    """
-    # Create a grid of ones and zeros
-    # 0 represents a wall, 1 represents a free space
-    grid = np.zeros(field.shape)
-    grid[field == -1] = 0 # Wall (not passable)
-    grid[field == -2] = 1  # Crate (not passable)
-    #to afjust when we change size of the field
-    grid[field == 0] = 1
-    grid[field == 1] = 1
-    grid[field == 2] = 1
-    grid[field == 3] = 1
-    grid[field == 4] = 1
-    grid[field == -3] = 1
-    # Create a graph from the grid
-    graph = nx.grid_2d_graph(grid.shape[0], grid.shape[1])
-    # Remove nodes that represent walls
-    walls = np.argwhere(grid == 0)
-    for wall in walls:
-        graph.remove_node(tuple(wall))
-    # Find the start node
-    start = tuple(player_pos)
-    # Find the path to the coin
-    try:
-        path = nx.shortest_path(graph, start, tuple(objective_pos), method='dijkstra')
-    except nx.NetworkXNoPath:
-        # No path found to this coin
-        path = []
-
-    return path
