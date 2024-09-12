@@ -1,3 +1,4 @@
+# environment.py
 import json
 import logging
 import pickle
@@ -20,7 +21,7 @@ from items import Coin, Explosion, Bomb
 WorldArgs = namedtuple("WorldArgs",
                        ["no_gui", "fps", "turn_based", "update_interval", "save_replay", "replay", "make_video", "continue_without_training", "log_dir", "save_stats", "match_name", "seed", "silence_errors", "scenario"])
 
-
+# Images of trophies to win
 class Trophy:
     coin_trophy = pygame.transform.smoothscale(pygame.image.load(s.ASSET_DIR / 'coin.png'), (15, 15))
     suicide_trophy = pygame.transform.smoothscale(pygame.image.load(s.ASSET_DIR / 'explosion_0.png'), (15, 15))

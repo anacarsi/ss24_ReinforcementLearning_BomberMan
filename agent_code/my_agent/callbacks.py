@@ -1,8 +1,10 @@
 import os
 import pickle
-import random
-
+from . import hyperparameters as hyp
 import numpy as np
+import networkx as nx
+from settings import ROWS, COLS
+from objective import Objective
 
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
@@ -10,70 +12,103 @@ ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
 def setup(self):
     """
-    Setup your code. This is called once when loading each agent.
-    Make sure that you prepare everything such that act(...) can be called.
-
-    When in training mode, the separate `setup_training` in train.py is called
-    after this method. This separation allows you to share your trained agent
-    with other students, without revealing your training code.
-
-    In this example, our model is a set of probabilities over actions
-    that are is independent of the game state.
-
-    :param self: This object is passed to all callbacks and you can set arbitrary values.
+    Setup Q-learning agent. This is called once when loading each agent.
     """
+
     if self.train or not os.path.isfile("my-saved-model.pt"):
-        self.logger.info("Setting up model from scratch.")
-        weights = np.random.rand(len(ACTIONS))
-        self.model = weights / weights.sum()
+        self.logger.info("Setting up Q-learning agent from scratch.")
+        # Initialize Q-table with zeros
+        self.q_table = {}
+        self.alpha = 0.9  # Learning rate
+        self.gamma = 0.9  # Discount factor
+        self.epsilon = 0.9  # Exploration rate
+        self.epsilon_decay = 0.9999
+        self.epsilon_min = 0
     else:
-        self.logger.info("Loading model from saved state.")
+        self.logger.info("Loading Q-learning model from saved state.")
         with open("my-saved-model.pt", "rb") as file:
-            self.model = pickle.load(file)
+            self.q_table = pickle.load(file)
+        self.epsilon = 0.1
+        self.epsilon_min = 0
+        self.learning_rate = 0.001 
+        self.discount_factor = 0.99 # To modify
 
 
-def act(self, game_state: dict) -> str:
+def act(agent, game_state: dict) -> str:
     """
-    Your agent should parse the input, think, and take a decision.
-    When not in training mode, the maximum execution time for this method is 0.5s.
-
-    :param self: The same object that is passed to all of your callbacks.
-    :param game_state: The dictionary that describes everything on the board.
-    :return: The action to take as a string.
+    Decide the next action based on the current game state using an epsilon-greedy policy and Q-values.
+    
+    :param game_state: A dictionary containing the current state of the game.
+    :return: The action to be taken as a string.
     """
-    # todo Exploration vs exploitation
-    random_prob = .1
-    if self.train and random.random() < random_prob:
+    state = state_to_features(game_state)
+    if random.random() < self.epsilon:
+        # Exploration: Choose a random action
         self.logger.debug("Choosing action purely at random.")
-        # 80%: walk in any direction. 10% wait. 10% bomb.
-        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
+        return np.random.choice(ACTIONS)
+    else:
+        # Exploitation: Choose the best action based on Q-values
+        self.logger.debug("Querying Q-table for action.")
+        q_values = self.q_table.get(tuple(state), np.zeros(NUM_ACTIONS))
+        best_action_index = np.argmax(q_values)
+        return ACTIONS[best_action_index]
+    
+    #####################
+    
+    field = game_state['field']
+    can_place_bomb = game_state['self'][2]
+    agent_x, agent_y = game_state['self'][3]
+    objective = Objective(game_state, task=1)
 
-    self.logger.debug("Querying model for action.")
-    return np.random.choice(ACTIONS, p=self.model)
+    # Determine the nearest objective's position (Task 1)
+    agent.logger.info('Task 1: Collect coins as quickly as possible')
+    nearest_objective = objective.objective(game_state, task=1)
+    dist_to_objective = (nearest_objective[0] - agent_x, nearest_objective[1] - agent_y)
+    
+    # Get the state of adjacent tiles, handling boundary conditions
+    up_state = field[agent_x, agent_y-1] if agent_y > 0 else -1
+    down_state = field[agent_x, agent_y+1] if agent_y < ROWS - 1 else -1
+    left_state = field[agent_x-1, agent_y] if agent_x > 0 else -1
+    right_state = field[agent_x+1, agent_y] if agent_x < COLS - 1 else -1
 
+    # Define the current state as a tuple
+    self.state = (dist_to_objective, up_state, down_state, left_state, right_state, can_place_bomb)
+
+    # Epsilon-greedy strategy to choose the next action
+    if np.random.random() > self.epsilon:
+        # Exploit: Choose the action with the highest Q-value for the current state
+        action_values = self.q_table.get(self.state, [-10] * len(ACTIONS))
+        action = np.argmax(action_values)
+    else:
+        # Explore: Choose a random action
+        action = np.random.randint(len(ACTIONS))
+    
+    self.action = action 
+
+    # Return the chosen action as a string
+    return ACTIONS[self.action]
 
 def state_to_features(game_state: dict) -> np.array:
     """
-    *This is not a required function, but an idea to structure your code.*
-
-    Converts the game state to the input of your model, i.e.
-    a feature vector.
-
-    You can find out about the state of the game environment via game_state,
-    which is a dictionary. Consult 'get_state_for_agent' in environment.py to see
-    what it contains.
-
-    :param game_state:  A dictionary describing the current game board.
-    :return: np.array
+    Converts the game state to the input of the Q-learning agent.
     """
-    # This is the dict before the game begins and after it ends
     if game_state is None:
         return None
 
-    # For example, you could construct several channels of equal shape, ...
-    channels = []
-    channels.append(...)
-    # concatenate them as a feature tensor (they must have the same shape), ...
-    stacked_channels = np.stack(channels)
-    # and return them as a vector
-    return stacked_channels.reshape(-1)
+    field = game_state['field']
+    features = []
+    
+    # Example feature extraction:
+    # 1. Player position
+    player_pos = game_state['self'][3]
+    features.append(player_pos[0])
+    features.append(player_pos[1])
+    
+    # 2. Coins and Crates
+    coins = game_state['coins']
+    crates = np.argwhere(field == -2)
+    features.append(len(coins))
+    features.append(len(crates))
+
+    # Convert features to a numpy array
+    return np.array(features)
