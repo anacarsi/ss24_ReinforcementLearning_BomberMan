@@ -125,7 +125,7 @@ def main(argv=None):
     play_parser.add_argument(
         "--continue-without-training", default=False, action="store_true"
     )
-    # play_parser.add_argument("--single-process", default=False, action="store_true")
+    play_parser.add_argument("--single-process", default=False, action="store_true")
 
     play_parser.add_argument("--scenario", default="classic", choices=s.SCENARIOS)
 
