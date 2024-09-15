@@ -1,3 +1,4 @@
+
 def is_between_placing_and_collection(gamestate, got_killed: bool):
     # check if a bomb or coin is in a 4 radius of the player,
     # to stretch the reward from collecting the coin to placing the bomb:
@@ -81,13 +82,14 @@ def distance_coins(xyp, coins):
 
 def bomb_place_incentive(state, got_killed):
     if got_killed:
-        return 20
+        return 4
     xp, yp = state["self"][3]
     if state["self"][2] == True:  # a bomb can be placed
         # check if a coin in near:
         dist_coin = distance_coins(state["self"][3], state["coins"])
         if dist_coin <= 5:
             return 5 - dist_coin
+
         else:
             # check if crate is next to the agent:
             # yes -> punish for not placing bomb,
@@ -102,13 +104,25 @@ def bomb_place_incentive(state, got_killed):
                 return -2
             else:
                 return 0
-    else: # a bomb is currently ticking            
-        save = is_safe(state, got_killed)
-        if save:
-            return 4
-        # else:
-        dist = distance(state["self"][3], state["bombs"])    
-        return min(dist, 4)  # 4 should also be the largest distance possible, because we just placed a bomb
+    # a bomb is currently ticking
+    save = is_safe(state, got_killed)
+    if save:
+        return 4
+    # else:
+    dist = distance(state["self"][3], state["bombs"])
+    return min(dist, 4)  # 4 should also be the largest distance possible, because we just placed a bomb
+
+def distance_coins(xyp, coins):
+    xp, yp = xyp
+    distance = 14 + 14  # the distance between the two adjacent corners i think
+    for x, y in coins:
+        new_dist = abs(x - xp) + abs(y - yp)
+        if x == xp and xp % 2 ==0:
+            new_dist+=2
+        if y == yp and yp % 2 ==0:
+            new_dist+=2
+        distance = min(distance, new_dist)
+    return distance
 
 def coin_hunter(state, got_killed):
     if got_killed:
@@ -117,10 +131,11 @@ def coin_hunter(state, got_killed):
     reward = max(5 - coin_dist, 0)
     return reward
 
-
 def potential_function(state, got_killed):
     # got killed is implicitly part of the state, but gets passed
     # anyway, so we do not need to compute it
-    reward = bomb_place_incentive(state, got_killed)
-    #reward = coin_hunter(state,got_killed)
+    reward = 0
+    #reward = bomb_place_incentive(state, got_killed)
+    reward = coin_hunter(state,got_killed)
     return reward
+

@@ -334,10 +334,12 @@ QUIT = "quit"
 
 def run_in_agent_runner(train: bool, agent_name: str, code_name: str, wta_queue: mp.Queue, atw_queue: mp.Queue):
     runner = AgentRunner(train, agent_name, code_name, atw_queue)
+    os.chdir(os.path.dirname(__file__) + f"/agent_code/{code_name}/") # TODO: clarify if this is present in the tournament
     while True:
         event_name, event_args = wta_queue.get()
         if event_name == QUIT:
             break
+        
         runner.process_event(event_name, *event_args)
 
 

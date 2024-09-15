@@ -5,6 +5,7 @@ from fallbacks import pygame
 
 # Game properties
 # board size (a smaller board may be useful at the beginning)
+N_ROUNDS = 0 # gets overwritten with args anyway
 COLS = 17
 ROWS = 17
 SCENARIOS = {

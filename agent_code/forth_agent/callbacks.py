@@ -17,7 +17,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.ba
 class ForthAgentModel(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(5,32,5,1,1) # 15 x 15 x 32
+        self.conv1 = nn.Conv2d(5,32,9,1,3) # 15 x 15 x 32
         self.linear1 = nn.Linear(7200,7200)
         self.linear2 = nn.Linear(7200,1024)
         self.linear3= nn.Linear(1024,6)
@@ -45,7 +45,7 @@ def setup(self):
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
-    if not os.path.isfile("./agent_code/forth_agent/model.pth"):
+    if not os.path.isfile("./model.pth"):
         raise Exception("no model created, please look at 'creation.ipnb' in this folder to initialize the model")
 
     else:
@@ -55,11 +55,16 @@ def setup(self):
         #     self.model = torch.load(file)
         self.logger.setLevel(logging.DEBUG) # could get overwritten in train.py
         self.model = ForthAgentModel()
-        self.model.load_state_dict(torch.load("./agent_code/forth_agent/model.pth",map_location=device))
+        self.model.load_state_dict(torch.load("./model.pth",map_location=device))
         self.model.to(device, dtype=torch.float32)
         self.epsilon = 0.4  # gets overwritten in training code anyway
 
 def act(self, game_state: dict) -> str:
+
+    # TODO: only do when other forth agent is training
+    if game_state["round"] % 100 == 50 and game_state["step"]==1:
+        self.model.load_state_dict(torch.load("./model.pth",map_location=device))
+
     """
     Your agent should parse the input, think, and take a decision.
     When not in training mode, the maximum execution time for this method is 0.5s.
@@ -102,17 +107,17 @@ def apply_mutations_to_action(x_flip,y_flip,transpose,model_choice):
         "UP": "LEFT", "LEFT": "UP",
         "DOWN": "RIGHT", "RIGHT": "DOWN"
     }
-
+    if transpose and model_choice in transpose_mapping:
+        model_choice = transpose_mapping[model_choice]
+    
+        
     if x_flip and model_choice in x_flip_mapping:
         model_choice = x_flip_mapping[model_choice]
 
     if y_flip and model_choice in y_flip_mapping:
         model_choice = y_flip_mapping[model_choice]
-
-    if transpose and model_choice in transpose_mapping:
-        model_choice = transpose_mapping[model_choice]
     return model_choice
-        
+
 
 
 def state_to_features(game_state: dict | None = None) -> tuple[np.array,bool,bool,bool]:

@@ -1,24 +1,25 @@
 from typing import List
 import torch
-import torch.optim as optim
 import random
 import events as e
-from .callbacks import state_to_features, ForthAgentModel,apply_mutations_to_action,device
+from .callbacks import MODEL_MAP,mutate_point, state_to_features, FifthAgentModel,apply_mutations_to_action,DummySelf, device
 import settings as s  # use to dynamiclly change the scenario
 from datetime import datetime, timedelta
 from numpy import ndarray
 import numpy as np
 from logging import Logger, INFO, DEBUG
-
+from pathlib import Path
 from .potential import potential_function
-BATCH_SIZE = 1000  # 2-3k
+from .history import History,TRANSITION_HISTORY_SIZE,REQUIRE_HISTORY
+BATCH_SIZE = 1  # 2-3k
+INIT_LR = 1e-5
 #EPISODES = 100_000  # 30k
 from settings import N_ROUNDS
 # Hyper parameters -- DO modify
-TRANSITION_HISTORY_SIZE = 500_000  # keep only 1M last transitions
-REQUIRE_HISTORY = 400_000  # 100k
-RECORD_ENEMY_TRANSITIONS = 1  # record enemy transitions with probability ...
-from .history import History
+
+
+RECORD_ENEMY_TRANSITIONS = 0.5  # record enemy transitions with probability ...
+
 LOG_LEVEL = INFO
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
@@ -26,31 +27,20 @@ ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
 # Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
 
 
-class DummySelf:
-    transitions: History
-    logger: Logger
-    epsilon: float
-    model: torch.nn.Module
-    optimizer: torch.optim.Optimizer
-    loss_method: torch.nn.modules.loss._Loss
-    started_training: str
-    last_saved: datetime
-    amount_saved:int
-    loss: list[float]
-    gamma: float
-    target_network: ForthAgentModel
-    trained: int
-    score: list[int]
+
 
 
 # Events
 PLACEHOLDER_EVENT = "PLACEHOLDER"
 
 def end_training(self:DummySelf):
-    torch.save(self.model.state_dict(), f"model.pth")
+    for index, model in enumerate(self.models):
+            torch.save(model.state_dict(),f"./models/model{index}.pth")
 
-    np.save(f"{self.started_training}_loss_history.npy", np.array(self.loss))
-    np.save(f"{self.started_training}_score_history.npy", np.array(self.score))
+    #torch.save(self.model.state_dict(), f"/home/david/dev/bomberman_rl/model.pth")
+
+    np.save(f"./{self.started_training}/loss_history.npy", np.array(self.loss))
+    np.save(f"./{self.started_training}/score_history.npy", np.array(self.score))
     self.logger.info("Ended training, saved all")
 
 def setup_training(self: DummySelf):
@@ -65,67 +55,68 @@ def setup_training(self: DummySelf):
     # (s, a, r, s')
     # self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
     self.logger.info(f"Device: {device}")
-    self.last_saved = datetime.now() 
+    self.last_saved = datetime.now()
+    self.last_snap = datetime.now()
     self.started_training = self.last_saved.strftime('%Y.%m.%d-%H.%M.%S')
     self.amount_saved = 0
     self.transitions = History(TRANSITION_HISTORY_SIZE, self.logger)
-    self.model.train()  # check what this even does?
-    self.epsilon = 0.01
+    self.epsilon = 0.1
     self.gamma = 0.97
     self.loss_method = torch.nn.MSELoss()
-    self.optimizer = torch.optim.Adam(self.model.parameters(), 1e-6)  # 00001 # 1e-5 for later
-
-    self.loss = []
+    self.optimizers = [torch.optim.Adam(model.parameters(), INIT_LR) for model in self.models]  # 00001 # 1e-5 for later
+    self.loss = [list() for _ in range(26)]
     self.score = []
-    self.target_network = ForthAgentModel()
-    self.target_network.to(device)
-    self.target_network.load_state_dict(self.model.state_dict())
+    self.target_networks = [FifthAgentModel() for _ in range(26)]
+    for index,model in enumerate(self.target_networks):
+        model.to(device,dtype=torch.float32)
+        model.load_state_dict(self.models[index].state_dict())
     self.trained = 0
     # for bomb dropping and collection coins:
     # s.SCENARIOS["loot-crate"]["CRATE_DENSITY"] = 0.7
-    #s.SCENARIOS["loot-crate"]["COIN_COUNT"] = 60
-    #s.MAX_STEPS = 140
+    s.SCENARIOS["loot-crate"]["COIN_COUNT"] = 70
+    s.MAX_STEPS = 130
     self.logger.setLevel(LOG_LEVEL)
-
+    path = Path(f"./{self.started_training}/loss")
+    path.mkdir(parents=True)
 
 def train(self: DummySelf):
-    self.trained = self.trained + 1
-    minibatch = self.transitions.get_batch(BATCH_SIZE)
-    if isinstance(minibatch, int):
-        if self.trained != 1:
-            raise Exception("the batch sampling failed despite working earlier. BUG!")
-        self.trained = 0
-        self.logger.info(f"not enough experience. The buffer len was: {minibatch} vs {REQUIRE_HISTORY} required")
-        return 
-    if self.trained % 200 == 0:
-        np.save(f"{self.started_training}_loss_history.npy", np.array(self.loss))
-        np.save(f"{self.started_training}_score_history.npy", np.array(self.score))
-        self.target_network.load_state_dict(self.model.state_dict())
-        self.logger.debug("200 train")
-        self.logger.info(f"trained at: {self.trained}, {self.transitions.wrapped} {self.transitions.index} epsilon down to: {self.epsilon} lr at {self.optimizer.param_groups[0]["lr"]}")
+    for x in range(4):
+        self.trained = self.trained + 1
+        minibatch = self.transitions.get_one()
+        if isinstance(minibatch, int):
+            if self.trained != 1:
+                raise Exception("the sampling failed despite working earlier. BUG!")
+            self.trained = 0
+            self.logger.info(f"not enough experience. The buffer len was: {minibatch} vs {REQUIRE_HISTORY} required")
+            return 
+        state, action, next_state, reward ,models= minibatch
 
-    self.optimizer.zero_grad()
-    state, action, next_state, reward = minibatch
+        #yi_arr = torch.zeros(BATCH_SIZE,device=device)  # store the mse.
+        #q_value = torch.zeros(BATCH_SIZE,device=device)
+        first_model_index,second_model_index = models
+        self.optimizers[first_model_index].zero_grad()
+        q_value: torch.Tensor = self.models[first_model_index].forward(state)
+        q_value = q_value[action]
+        if second_model_index != -1 :
+            with torch.no_grad():
+                target_q: torch.Tensor = self.target_networks[second_model_index].forward(next_state)
+                #target_q_mask: torch.Tensor = ~target_q[:, 0].isnan()
+                target_q = target_q.max(dim=0).values
+        else:
+            target_q = 0
+        
+        #yi_arr = reward + self.gamma * (target_q_mask * target_q).nan_to_num(0.0)
+        yi_arr = reward + self.gamma * target_q
+        loss = self.loss_method(q_value, yi_arr)
+        loss.backward()
+        self.loss[first_model_index].append(loss.item())
+        if random.random() < 0.01:
+            self.target_networks[first_model_index].load_state_dict(self.models[first_model_index].state_dict())
+            self.target_networks[first_model_index].to(device,dtype=torch.float32)
 
-    #yi_arr = torch.zeros(BATCH_SIZE,device=device)  # store the mse.
-    #q_value = torch.zeros(BATCH_SIZE,device=device)
-    q_value: torch.Tensor = self.model.forward(state)
-    q_value = q_value.gather(1, action.unsqueeze(1)).squeeze()
-    with torch.no_grad():
-        target_q: torch.Tensor = self.target_network.forward(next_state)
-        #target_q_mask: torch.Tensor = ~target_q[:, 0].isnan()
-        target_q = target_q.max(dim=1).values
-
+        self.optimizers[first_model_index].step()
+        
     
-    #yi_arr = reward + self.gamma * (target_q_mask * target_q).nan_to_num(0.0)
-    yi_arr = reward + self.gamma * (target_q).nan_to_num(0.0)
-    
-    loss = self.loss_method(q_value, yi_arr)
-
-    loss.backward()
-    self.optimizer.step()
-    self.loss.append(loss.item())
-    #self.logger.info(f"Loss is: {self.loss[-1]}")
 
 def game_events_occurred(
     self: DummySelf, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]
@@ -162,9 +153,12 @@ def game_events_occurred(
         old_transformed_state,
         new_action,
         state_to_features(new_game_state)[0],
-        reward_from_events(self, "forth_agent", events, add_reward),
+        reward_from_events(self, "fifth_agent", events, add_reward),
+        (MODEL_MAP [mutate_point(old_game_state["self"][3])],MODEL_MAP[mutate_point(new_game_state["self"][3])])
     )
-    #train(self)
+    if random.random() < 0.001:
+        self.logger.info(f"train bei {self.trained}")
+    train(self)
 
 def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, events: List[str]):
     """
@@ -179,17 +173,19 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
 
     :param self: The same object that is passed to all of your callbacks.
     """
+    round = last_game_state["round"]
     # self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
     end_potential = potential_function(last_game_state, got_killed=(e.GOT_KILLED in events))
     # Using the event could seem like a violation fo the potential rule, but GOT_KILLED is actually a
     # property of the state, so this is fine.
     last_state , x_flip,y_flip,transpose = state_to_features(last_game_state)
-    add_reward = -end_potential
+    add_reward = - end_potential
     self.transitions.append(
         last_state,
         ACTIONS.index(apply_mutations_to_action(x_flip,y_flip,transpose,last_action)),
-        torch.full((5, 17, 17), torch.nan),
-        reward_from_events(self, "forth_agent", events, add_reward),
+        torch.empty((880,)),
+        reward_from_events(self, "fifth_agent", events, add_reward),
+        (MODEL_MAP [mutate_point(last_game_state["self"][3])],-1)
     )
     train(self)
     score = last_game_state["self"][1]
@@ -198,22 +194,36 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
     self.logger.info(f"Score at end of round:  {score}")
 
     now = datetime.now()
-    if now - self.last_saved > timedelta(minutes=15):
-        torch.save(
-            self.model.state_dict(),
-            f"{self.started_training}_snapshot_{now.isoformat()}.pth",
-        )
-        torch.save(self.model.state_dict(), f"model.pth")
+    if now - self.last_saved > timedelta(minutes=5):           
+        self.epsilon = max(self.epsilon* 0.95,0.01)
+        #s.MAX_STEPS = min(400, s.MAX_STEPS + 10 )
+        ##s.SCENARIOS["loot-crate"]["CRATE_DENSITY"] = 0.75 +
+        # s.SCENARIOS["loot-crate"]["COIN_AMOUNT"] =
+        
+        self.logger.debug("5min train")
+        self.logger.info(f"trained at: {self.trained}, wrapped: {self.transitions.wrapped} ,index: {self.transitions.index} epsilon down to: {self.epsilon} lr for 0th at {self.optimizers[0].param_groups[0]["lr"]}")
+        for index,list in enumerate(self.loss):
+            np.save(f"./{self.started_training}/loss/loss_history_{index}.npy", np.array(list))
+        np.save(f"./{self.started_training}/score_history.npy", np.array(self.score))
+
+        for index,model in enumerate(self.models):
+            torch.save(model.state_dict(), f"./models/model{index}.pth")
         self.amount_saved += 1
         self.last_saved = now
         self.logger.info("saved snapshot")
-        self.epsilon = max(0.01,self.epsilon * 0.85)
-        for param in self.optimizer.param_groups:
-            param["lr"] = param["lr"]* 0.9
-        self.logger.info(f"trained at: {self.trained}, wrapped: {self.transitions.wrapped} ,index: {self.transitions.index} epsilon down to: {self.epsilon} lr for 0th at {self.optimizer.param_groups[0]["lr"]}") 
+    if now - self.last_snap > timedelta(minutes=30):
+        for optimizer in self.optimizers:
+           for params in optimizer.param_groups:
+                params["lr"] = params["lr"]* 0.5
+        #s.MAX_STEPS = min(400, s.MAX_STEPS + 33) 
+        self.last_snap = now
+        
+        for index,model in enumerate(self.models):
+            torch.save(
+                model.state_dict(),
+                f"./{self.started_training}/snapshot_{now.isoformat()}_model_{index}.pth",
+            )
     # Store the model
-    if last_game_state["round"] % 100 ==47:
-        torch.save(self.model.state_dict(),"model.pth")
 
     if last_game_state["round"] == N_ROUNDS:  # it is the last round
         now = datetime.now().isoformat()
@@ -224,8 +234,7 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
         np.save(f"loss_history_{now}.npy", np.array(self.loss))
         np.save(f"score_history_{now}.npy", np.array(self.score))
         self.logger.info("training finished, saving finished")
-    if random.random() < 0.001:
-        self.logger.info(f"train bei {self.trained}")
+
 
 def enemy_game_events_occurred(
     self:DummySelf,
@@ -251,8 +260,9 @@ def enemy_game_events_occurred(
         ACTIONS.index(apply_mutations_to_action(x_flip,y_flip,transpose, enemy_action)),
         state_to_features(enemy_game_state)[0],
         reward_from_events(self, enemy_name, enemy_events, add_reward),
+        (MODEL_MAP [mutate_point(old_enemy_game_state["self"][3])],MODEL_MAP[mutate_point(enemy_game_state["self"][3])])
     )
-    
+
 
 def reward_from_events(self, agent_name, events: List[str], add=0) -> int:
     """
@@ -261,8 +271,7 @@ def reward_from_events(self, agent_name, events: List[str], add=0) -> int:
     Here you can modify the rewards your agent get so as to en/discourage
     certain behavior.
     """
-    game_rewards = {e.COIN_COLLECTED: 10, e.KILLED_OPPONENT: 50, e.INVALID_ACTION: -10}  # official  # official
-
+    game_rewards = {e.COIN_COLLECTED: 10, e.KILLED_OPPONENT: 50, e.INVALID_ACTION: -50}  # official  # official
     reward_sum = add  # add custo rewards
     for event in events:
         if event in game_rewards:

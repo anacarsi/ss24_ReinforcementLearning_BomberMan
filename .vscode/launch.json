@@ -12,16 +12,17 @@
             "console": "integratedTerminal",
             "args": [
                 //"${command:pickArgs}"
-"play",
-"--scenario",
-"coin-heaven",
-"--agents",
-"first_agent",
-"--n-rounds",
-"10000",
-"--train",
-"1",
-"--no-gui",
+                "play",
+                "--scenario",
+                "coin-heaven",
+                "--agents",
+                "fifth_agent",
+                "--n-rounds",
+                "10",
+                "--train",
+                "1",
+                
+                //"--no-gui",
             ]
         }
     ]
