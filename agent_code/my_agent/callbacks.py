@@ -1,9 +1,14 @@
 # callbacks.py
 import os
+import sys
 import pickle
 import numpy as np
 import networkx as nx
-from settings import ROWS, COLS
+
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, parent_dir)
+
+import settings as s
 
 def setup(self):
     """
@@ -100,6 +105,7 @@ class QLearningModel():
         self.discount_factor = 0.99
         self.q_table = {} 
         self.task = 1
+        self.define_task(self.task)
 
     def define_task(self, task) -> None:
         """
@@ -135,7 +141,7 @@ class QLearningModel():
             action = np.random.choice(self.actions)
         else:
             candidates = self.q_table.get(tuple(state), np.zeros(len(self.actions)))
-            actio = self.actions[np.argmax(candidates)]
+            action = self.actions[np.argmax(candidates)]
         
         # Decay epsilon
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)

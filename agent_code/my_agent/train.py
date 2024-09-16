@@ -5,7 +5,7 @@ import events as e
 from json import dump as json_dump
 from pickle import dump as pickle_dump
 from typing import List, Dict, Tuple
-from . import objective as a
+from . import objective as ob
 from callbacks import state_to_features
 
 def setup_training(self):
@@ -17,6 +17,8 @@ def setup_training(self):
     self.max_steps = 100 # max steps per episode
     self.rewards = [] # store rewards
     self.graph = []
+    self.discount_factor = 0.99
+    self.learning_rate = 0.1
 
 def game_events_occurred(
         self,
@@ -38,7 +40,7 @@ def game_events_occurred(
     new_state = state_to_features(new_game_state)
 
     # Get the reward for the events
-    reward = get_reward(events)
+    reward = calculate_reward(events)
 
     # Update the Q-table
     update_q_table(state, action, reward, new_state)
@@ -54,32 +56,21 @@ def calculate_reward(
     new_field: np.ndarray,
     events: List[str]
 ) -> float:
-    """
-    Calculate the reward based on the state and events.
-
-    :param old_player_pos: Previous position of the player.
-    :param old_objective: Previous objective.
-    :param new_self_pos: New position of the player.
-    :param new_objective: New objective.
-    :param old_field: Field representation before the action.
-    :param new_field: Field representation after the action.
-    :param events: List of events occurred.
-    :return: Calculated reward.
-    """
-    old_distance = a.dijkstra(old_player_pos, old_objective, old_field)
-    new_distance = a.dijkstra(new_self_pos, new_objective, new_field)
+    old_distance = ob.distance_objective(old_player_pos, old_objective, old_field)
+    new_distance = ob.distance_objective(new_self_pos, new_objective, new_field)
 
     if old_objective == new_objective:
-        reward = 1 if len(new_distance) < len(old_distance) else -3
+        reward = 1 if len(new_distance) < len(old_distance) else -3  # Discourages moving away or not making progress
     else:
-        reward = 0
-    
+        reward = 0  # No reward if the objective has changed
+
     if "COIN_COLLECTED" in events:
         reward += 2
     
     return reward
 
-def update_q_table(q_table, state, action, reward, next_state, alpha=0.1, gamma=0.98):
+
+def update_q_table(self, q_table, state, action, reward, next_state):
     """
     Update the Q-value for a given state-action pair using the Q-learning update rule.
     
@@ -96,7 +87,7 @@ def update_q_table(q_table, state, action, reward, next_state, alpha=0.1, gamma=
 
     # Q-learning update rule
     current_q_value = q_table[state, action]
-    q_table[state, action] = current_q_value + alpha * (reward + gamma * max_next_q_value - current_q_value)
+    q_table[state, action] = current_q_value + self.learning_rate * (reward + self.discount_factor * max_next_q_value - current_q_value)
 
 
 def end_of_round(self, last_game_state: Dict, last_action: str, events: List[str]):
@@ -119,6 +110,7 @@ def end_of_round(self, last_game_state: Dict, last_action: str, events: List[str
     self.eps += 1
     self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
+
 def save_metrics(self):
     """Save the graph and Q-table to files."""
     with open("graph.txt", "w") as file:
@@ -126,16 +118,6 @@ def save_metrics(self):
     with open("q_table.pickle", "wb") as file:
         pickle_dump(self.q_table, file)
 
-#############################################
-
-# alternative functions (TODO: implement)
-def update_model(self, state, action, next_state, reward):
-    """ Update the agent's model based on the collected experience """
-    # Implement model update logic, for example using Q-learning:
-    q_value = self.q_table[state][action]
-    max_next_q_value = np.max(self.q_table[next_state])
-    new_q_value = q_value + self.learning_rate * (reward + self.discount_factor * max_next_q_value - q_value)
-    self.q_table[state][action] = new_q_value
 
 def log_training_progress(self, episode):
     """ Log the average reward over the last 100 episodes """
