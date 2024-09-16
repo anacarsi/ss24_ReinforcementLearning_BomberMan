@@ -70,10 +70,10 @@ def setup_training(self: DummySelf):
     self.amount_saved = 0
     self.transitions = History(TRANSITION_HISTORY_SIZE, self.logger)
     self.model.train()  # check what this even does?
-    self.epsilon = 0.01
+    self.epsilon = 0.1
     self.gamma = 0.97
     self.loss_method = torch.nn.MSELoss()
-    self.optimizer = torch.optim.Adam(self.model.parameters(), 1e-6)  # 00001 # 1e-5 for later
+    self.optimizer = torch.optim.Adam(self.model.parameters(), 1e-4)  # 00001 # 1e-5 for later
 
     self.loss = []
     self.score = []

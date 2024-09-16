@@ -53,7 +53,7 @@ def setup(self):
         # with open("my-saved-model.pt", "rb") as file:
         #     # self.model = pickle.load(file)
         #     self.model = torch.load(file)
-        self.logger.setLevel(logging.DEBUG) # could get overwritten in train.py
+        self.logger.setLevel(logging.INFO) # could get overwritten in train.py
         self.model = ForthAgentModel()
         self.model.load_state_dict(torch.load("./model.pth",map_location=device))
         self.model.to(device, dtype=torch.float32)
