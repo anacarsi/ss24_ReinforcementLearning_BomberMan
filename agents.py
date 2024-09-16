@@ -130,16 +130,16 @@ class Agent:
         self.last_game_state = None
         self.last_action = None
 
-    @property
+    @property # read-only
     def base_timeout(self):
         return s.TRAIN_TIMEOUT if self.train else s.TIMEOUT
 
     def add_event(self, event):
-        if event in EVENT_STAT_MAP:
+        if event in EVENT_STAT_MAP: # only count events that are in the stat map
             self.note_stat(EVENT_STAT_MAP[event])
         self.events.append(event)
 
-    def note_stat(self, name, value=1):
+    def note_stat(self, name, value=1): # to 
         self.statistics[name] += value
         self.lifetime_statistics[name] += value
 

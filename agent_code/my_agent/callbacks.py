@@ -1,4 +1,3 @@
-# callbacks.py
 import os
 import sys
 import pickle
@@ -16,7 +15,11 @@ def setup(self):
     """
     self.model = QLearningModel()
     self.logger.info("Model initialized")
-    self.load_model()
+    load_model(self)
+    self.logger.info("Model loaded")
+
+def get_dir() -> str:
+        return os.path.dirname(__file__)
 
 def load_model(self):
     """
@@ -26,14 +29,12 @@ def load_model(self):
     if os.path.isfile(get_dir() + '/q_table.pkl'):
         with open(get_dir() + '/q_table.pkl', 'rb') as file:
             q_table = pickle.load(file)
-            self.model.load_q_table(q_table)
+            self.model.load_table(q_table)
             self.logger.info("Model loaded")
             print("Model loaded")
     else:
         self.logger.info("Model not found")
 
-    def get_dir():
-        return os.path.dirname(__file__)
 
 
 def act(self, game_state: dict) -> str:
@@ -47,29 +48,7 @@ def act(self, game_state: dict) -> str:
 
     self.logger.info(f"Choosing action: {action} for state: {game_state}")
 
-    #####################
-    
-    field = game_state['field']
-    can_place_bomb = game_state['self'][2]
-    agent_x, agent_y = game_state['self'][3]
-    objective = Objective(game_state, task=1)
-
-    # Determine the nearest objective's position (Task 1)
-    agent.logger.info('Task 1: Collect coins as quickly as possible')
-    nearest_objective = objective.objective(game_state, task=1)
-    dist_to_objective = (nearest_objective[0] - agent_x, nearest_objective[1] - agent_y)
-    
-    # Get the state of adjacent tiles, handling boundary conditions
-    up_state = field[agent_x, agent_y-1] if agent_y > 0 else -1
-    down_state = field[agent_x, agent_y+1] if agent_y < ROWS - 1 else -1
-    left_state = field[agent_x-1, agent_y] if agent_x > 0 else -1
-    right_state = field[agent_x+1, agent_y] if agent_x < COLS - 1 else -1
-
-    # Define the current state as a tuple
-    self.state = (dist_to_objective, up_state, down_state, left_state, right_state, can_place_bomb)
-
-    # Return the chosen action as a string
-    return ACTIONS[self.action]
+   
 
 def state_to_features(game_state: dict) -> np.array:
     """
