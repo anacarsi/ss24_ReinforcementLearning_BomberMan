@@ -35,8 +35,6 @@ def load_model(self):
     else:
         self.logger.info("Model not found")
 
-
-
 def act(self, game_state: dict) -> str:
     """
     Decide the next action based on the current game state using an epsilon-greedy policy and Q-values.
@@ -47,8 +45,6 @@ def act(self, game_state: dict) -> str:
     action = self.model.choose_action(game_state)
 
     self.logger.info(f"Choosing action: {action} for state: {game_state}")
-
-   
 
 def state_to_features(game_state: dict) -> np.array:
     """
@@ -83,7 +79,7 @@ class QLearningModel():
         self.learning_rate = 0.1
         self.discount_factor = 0.99
         self.q_table = {} 
-        self.task = 1
+        self.task = 2
         self.define_task(self.task)
 
     def define_task(self, task) -> None:
@@ -126,5 +122,3 @@ class QLearningModel():
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
         return action
-    
-
