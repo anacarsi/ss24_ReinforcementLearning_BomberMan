@@ -11,6 +11,7 @@ import logging
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
 
+INVERSE_TEMPERATURE = 10
 
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
@@ -93,7 +94,7 @@ def act(self, game_state: dict) -> str:
 
     q_vals = {x:y for x,y in zip(actions,model_out)}
     self.logger.debug(f"The actions were evaluated as follows: {q_vals.items()}")
-    probabilites = torch.softmax(model_out * 2,0).numpy() # add temperature to the mix (0.2)
+    probabilites = torch.softmax(model_out * INVERSE_TEMPERATURE).numpy() # add temperature to the mix (0.2)
     model_choice = np.random.choice(actions,p=probabilites) 
     #model_choice = ACTIONS[torch.argmax(model_out)]
 

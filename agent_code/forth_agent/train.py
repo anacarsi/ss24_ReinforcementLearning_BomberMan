@@ -11,12 +11,12 @@ import numpy as np
 from logging import Logger, INFO, DEBUG
 
 from .potential import potential_function
-BATCH_SIZE = 1000  # 2-3k
+BATCH_SIZE = 1200  # 2-3k
 #EPISODES = 100_000  # 30k
 from settings import N_ROUNDS
 # Hyper parameters -- DO modify
 TRANSITION_HISTORY_SIZE = 500_000  # keep only 1M last transitions
-REQUIRE_HISTORY = 400_000  # 100k
+REQUIRE_HISTORY = 450_000  # 100k
 RECORD_ENEMY_TRANSITIONS = 1  # record enemy transitions with probability ...
 from .history import History
 LOG_LEVEL = INFO
@@ -70,10 +70,10 @@ def setup_training(self: DummySelf):
     self.amount_saved = 0
     self.transitions = History(TRANSITION_HISTORY_SIZE, self.logger)
     self.model.train()  # check what this even does?
-    self.epsilon = 0.1
+    self.epsilon = 0.04
     self.gamma = 0.97
     self.loss_method = torch.nn.MSELoss()
-    self.optimizer = torch.optim.Adam(self.model.parameters(), 1e-4)  # 00001 # 1e-5 for later
+    self.optimizer = torch.optim.Adam(self.model.parameters(), 3e-6)  # 00001 # 1e-5 for later
 
     self.loss = []
     self.score = []
@@ -207,9 +207,9 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
         self.amount_saved += 1
         self.last_saved = now
         self.logger.info("saved snapshot")
-        self.epsilon = max(0.01,self.epsilon * 0.85)
+        self.epsilon = max(0.01,self.epsilon * 0.97)
         for param in self.optimizer.param_groups:
-            param["lr"] = param["lr"]* 0.9
+            param["lr"] = param["lr"]* 0.98
         self.logger.info(f"trained at: {self.trained}, wrapped: {self.transitions.wrapped} ,index: {self.transitions.index} epsilon down to: {self.epsilon} lr for 0th at {self.optimizer.param_groups[0]["lr"]}") 
     # Store the model
     if last_game_state["round"] % 100 ==47:
