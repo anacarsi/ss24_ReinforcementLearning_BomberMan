@@ -31,7 +31,7 @@ class Objective:
                 objective = self.player_pos
                 print("No coins left to collect.")
 
-        elif self.task == 2:
+        elif self.task > 2:
             # Task 2: Deal with crates and collect hidden coins
             if self.coin_array:
                 objective = self.coin_array[0]  # Nearest coin
@@ -99,7 +99,5 @@ class Objective:
         path.reverse()
         
         return path
-
-
 
 

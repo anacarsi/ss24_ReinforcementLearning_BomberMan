@@ -1,4 +1,4 @@
-from collections import namedtuple, deque
+from collections import namedtuple, deque # self.transitions stores recent transitions (state, action, reward, next_state) using a deque
 import numpy as np
 import pickle
 from typing import List, Dict, Tuple
@@ -9,15 +9,12 @@ from .callbacks import state_to_features
 Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
 
 # Hyperparameters
-TRANSITION_HISTORY_SIZE = 1000  # Increased history size for better learning
+TRANSITION_HISTORY_SIZE = 3  # Number of transitions to keep in memory
 DISCOUNT_FACTOR = 0.99  # Gamma for future rewards
 LEARNING_RATE = 0.1  # Alpha for Q-learning updates
-EPSILON_START = 1.0
-EPSILON_MIN = 0.1
-EPSILON_DECAY = 0.995
 
-# Define possible actions
-ACTIONS = ['Move Up', 'Move Down', 'Move Left', 'Move Right', 'Drop Bomb', 'Wait']
+# Example custom event
+PLACEHOLDER_EVENT = "PLACEHOLDER"
 
 def setup_training(self):
     """
@@ -27,13 +24,11 @@ def setup_training(self):
     # Setup a deque to store transitions with a limited history size
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
     # Initialize training parameters
-    self.epsilon = EPSILON_START
-    self.epsilon_min = EPSILON_MIN
-    self.epsilon_decay = EPSILON_DECAY
-    self.q_table = {}  # Use a dictionary for more flexible state-action pairs
+    self.epsilon = 1.0  # Exploration rate
+    self.epsilon_min = 0.1
+    self.epsilon_decay = 0.995
+    self.q_table = np.zeros((100, 6))  # Example: assuming a 100 state x 6 action Q-table
     self.graph = []  # To store metrics (for example, rewards over episodes)
-    self.total_reward = 0
-    self.eps = 0
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     """
@@ -87,14 +82,14 @@ def reward_from_events(self, events: List[str]) -> int:
     game_rewards = {
         e.COIN_COLLECTED: 1,
         e.KILLED_OPPONENT: 5,
-        e.CRATES_DESTROYED: 3,
-        e.BOMB_DROPPED: -1,
-        e.INVALID_ACTION: -1,
-        e.KILLED_SELF: -100,
+        PLACEHOLDER_EVENT: -0.1  # Negative reward for a custom placeholder event
     }
     
     # Sum up the rewards from the events
-    reward_sum = sum(game_rewards.get(event, 0) for event in events)
+    reward_sum = 0
+    for event in events:
+        if event in game_rewards:
+            reward_sum += game_rewards[event]
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
 
@@ -107,39 +102,17 @@ def update_q_table(self, state, action, reward, next_state):
     :param reward: The reward received from the action.
     :param next_state: The next state after the action.
     """
-    # Initialize Q-values for unseen states and actions
-    if state not in self.q_table:
-        self.q_table[state] = np.zeros(len(ACTIONS))
-    if next_state not in self.q_table:
-        self.q_table[next_state] = np.zeros(len(ACTIONS))
-    
-    # Get the current Q-value for the (state, action) pair
-    current_q_value = self.q_table[state][ACTIONS.index(action)]
-    
     # Find the max Q-value for the next state (future reward estimation)
-    max_next_q_value = np.max(self.q_table[next_state])
+    if next_state is not None:
+        max_next_q_value = np.max(self.q_table[next_state])
+    else:
+        max_next_q_value = 0  # No next state at the end of the game
+
+    # Get the current Q-value for the (state, action) pair
+    current_q_value = self.q_table[state, action]
     
     # Q-learning update rule
-    self.q_table[state][ACTIONS.index(action)] = current_q_value + LEARNING_RATE * (
-        reward + DISCOUNT_FACTOR * max_next_q_value - current_q_value
-    )
-
-def select_action(self, state):
-    """
-    Select an action based on the epsilon-greedy strategy.
-    
-    :param state: The current state in features.
-    :return: The chosen action.
-    """
-    if np.random.rand() < self.epsilon:
-        # Explore: Random action
-        return np.random.choice(ACTIONS)
-    else:
-        # Exploit: Best action based on Q-table
-        if state in self.q_table:
-            return ACTIONS[np.argmax(self.q_table[state])]
-        else:
-            return np.random.choice(ACTIONS)  # Random action if state not seen
+    self.q_table[state, action] = current_q_value + LEARNING_RATE * (reward + DISCOUNT_FACTOR * max_next_q_value - current_q_value)
 
 def log_training_progress(self, episode):
     """
@@ -148,5 +121,5 @@ def log_training_progress(self, episode):
     :param episode: The current episode number.
     """
     # Example: Log the average reward over the last 100 episodes
-    avg_reward = sum(self.graph[-100:]) / 100 if len(self.graph) >= 100 else sum(self.graph) / len(self.graph)
+    avg_reward = sum(self.rewards[-100:]) / 100 if len(self.rewards) >= 100 else sum(self.rewards) / len(self.rewards)
     self.logger.info(f"Episode {episode}: Average Reward: {avg_reward}")
