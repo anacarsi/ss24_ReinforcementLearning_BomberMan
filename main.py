@@ -8,7 +8,8 @@ import settings as s
 from environment import BombeRLeWorld, GUI
 from fallbacks import pygame, LOADED_PYGAME
 from replay import ReplayWorld
-
+from datetime import datetime
+import json
 ESCAPE_KEYS = (pygame.K_q, pygame.K_ESCAPE)
 
 
@@ -91,7 +92,12 @@ def world_controller(
                         key_pressed = event.key
                         if key_pressed in s.INPUT_MAP or key_pressed in ESCAPE_KEYS:
                             do_continue = True
+    total_scores= {}
+    for agent in world.agents:
+        total_scores[agent.display_name]=agent.total_score
 
+    with open(f"eval_scores_{datetime.now().isoformat().json}","w") as write:
+        write.write(json.dumps(total_scores))
     world.end()
 
 

@@ -16,12 +16,13 @@
                 "--scenario",
                 "coin-heaven",
                 "--agents",
-                "fifth_agent",
+                "forth_agent",
+                "rule_based_agent",
                 "--n-rounds",
                 "10",
                 "--train",
                 "1",
-                
+                "--continue-without-training"
                 //"--no-gui",
             ]
         }

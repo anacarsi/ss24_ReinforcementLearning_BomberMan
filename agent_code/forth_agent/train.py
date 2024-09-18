@@ -43,9 +43,6 @@ class DummySelf:
     score: list[int]
 
 
-# Events
-PLACEHOLDER_EVENT = "PLACEHOLDER"
-
 def end_training(self:DummySelf):
     torch.save(self.model.state_dict(), f"model.pth")
 
@@ -70,10 +67,10 @@ def setup_training(self: DummySelf):
     self.amount_saved = 0
     self.transitions = History(TRANSITION_HISTORY_SIZE, self.logger)
     self.model.train()  # check what this even does?
-    self.epsilon = 0.04
+    self.epsilon = 0.05
     self.gamma = 0.97
     self.loss_method = torch.nn.MSELoss()
-    self.optimizer = torch.optim.Adam(self.model.parameters(), 3e-6)  # 00001 # 1e-5 for later
+    self.optimizer = torch.optim.Adam(self.model.parameters(), 5e-6)  # 00001 # 1e-5 for later
 
     self.loss = []
     self.score = []
@@ -85,6 +82,7 @@ def setup_training(self: DummySelf):
     # s.SCENARIOS["loot-crate"]["CRATE_DENSITY"] = 0.7
     #s.SCENARIOS["loot-crate"]["COIN_COUNT"] = 60
     #s.MAX_STEPS = 140
+
     self.logger.setLevel(LOG_LEVEL)
 
 
@@ -207,11 +205,11 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
         self.amount_saved += 1
         self.last_saved = now
         self.logger.info("saved snapshot")
-        self.epsilon = max(0.01,self.epsilon * 0.97)
+        self.epsilon = max(0.01,self.epsilon * 0.9)
         for param in self.optimizer.param_groups:
-            param["lr"] = param["lr"]* 0.98
+            param["lr"] = param["lr"]* 0.95
         self.logger.info(f"trained at: {self.trained}, wrapped: {self.transitions.wrapped} ,index: {self.transitions.index} epsilon down to: {self.epsilon} lr for 0th at {self.optimizer.param_groups[0]["lr"]}") 
-    # Store the model
+    # Store the model, to allow reloading it by simultaniously playing agents which are not training
     if last_game_state["round"] % 100 ==47:
         torch.save(self.model.state_dict(),"model.pth")
 
@@ -238,6 +236,7 @@ def enemy_game_events_occurred(
     if random.random() > RECORD_ENEMY_TRANSITIONS:
         return
     if enemy_action is None:  # clean up the NONE action to waited action
+        # this is needed for the Rule based agent
         enemy_action = "WAIT"
         enemy_events.remove("INVALID_ACTION")
         enemy_events.append(e.WAITED)

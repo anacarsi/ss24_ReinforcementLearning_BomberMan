@@ -13,6 +13,7 @@ from typing import Tuple, Any
 import events as e
 import settings as s
 from fallbacks import pygame
+from settings import EVAL
 
 AGENT_API = {
     "callbacks": {
@@ -218,7 +219,14 @@ class AgentRunner:
 
         self.callbacks = importlib.import_module("agent_code." + self.code_name + ".callbacks")
         if train:
-            self.train = importlib.import_module("agent_code." + self.code_name + ".train")
+            try:
+                if EVAL == False:
+                    self.train = importlib.import_module("agent_code." + self.code_name + ".train")
+                if EVAL == True:
+                    self.train = importlib.import_module("agent_code." + self.code_name + ".eval")
+            except Exception as e:
+                self.train = importlib.import_module("agent_code." + self.code_name + ".train")
+            print(self.train)
         for module_name in ["callbacks"] + (["train"] if train else []):
             module = getattr(self, module_name)
             for event_name, event_args in AGENT_API[module_name].items():

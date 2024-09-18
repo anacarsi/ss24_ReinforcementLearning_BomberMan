@@ -117,7 +117,6 @@ def coin_hunter(state, got_killed):
     reward = max(5 - coin_dist, 0)
     return reward
 
-
 def potential_function(state, got_killed):
     # got killed is implicitly part of the state, but gets passed
     # anyway, so we do not need to compute it
