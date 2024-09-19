@@ -1,5 +1,4 @@
 import os
-import pickle
 import random
 
 import numpy as np
@@ -54,14 +53,11 @@ def setup(self):
 
     else:
         self.logger.info("Loading model from saved state.")
-        # with open("my-saved-model.pt", "rb") as file:
-        #     # self.model = pickle.load(file)
-        #     self.model = torch.load(file)
         self.logger.setLevel(logging.INFO)  # could get overwritten in train.py
         self.model = ForthAgentModel()
         self.model.load_state_dict(torch.load("./model.pth", map_location=device))
         self.model.to(device, dtype=torch.float32)
-        self.epsilon = 0.0  # gets overwritten in training code anyway
+        self.epsilon = 0.0  # gets overwritten in training code 
 
 
 def act(self, game_state: dict) -> str:
@@ -78,6 +74,7 @@ def act(self, game_state: dict) -> str:
     :param game_state: The dictionary that describes everything on the board.
     :return: The action to take as a string.
     """
+    #epsilon greedy strategy
     if self.train and random.random() <= self.epsilon:
         return np.random.choice(ACTIONS, p=[0.2, 0.2, 0.2, 0.2, 0.1, 0.1])
 
@@ -126,8 +123,6 @@ def apply_mutations_to_action(x_flip, y_flip, transpose, model_choice):
 
 def state_to_features(game_state: dict | None = None) -> tuple[np.array, bool, bool, bool]:
     """
-    *This is not a required function, but an idea to structure your code.*
-
     Converts the game state to the input of your model, i.e.
     a feature vector.
 

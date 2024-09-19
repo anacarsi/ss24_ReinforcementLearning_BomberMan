@@ -7,23 +7,6 @@ class History:
         self.action = torch.zeros((TRANSITION_HISTORY_SIZE,), device=device,dtype= torch.int64)
         self.next_state = torch.zeros((TRANSITION_HISTORY_SIZE, 5, 17, 17), device=device)
         self.reward = torch.zeros((TRANSITION_HISTORY_SIZE,), device=device)
-        
-        # K-step theory:
-
-        # old:
-        # yi_arr = reward + self.gamma * (target_q).nan_to_num(0.0)
-        
-        
-        # yi_arr =reward1 + gamma * reward2 +  gamma^k * reward..k 
-        # reward1 + gamma * reward2 +  gamma^k can already be stored in the history reward array.
-        #  
-        # self.gamma_k = torch.zeros(...)
-        
-        # during training
-        # yi_arr = reward_of_k_next_steps_discounted + self.gamma^k+1 * max(Q_val(next_step))
-        # not sure about the indices, one by off errors
-
-
         self.size = size
         self.index = 0  
         self.full_enough = False

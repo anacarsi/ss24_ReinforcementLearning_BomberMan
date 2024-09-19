@@ -509,6 +509,8 @@ class BombeRLeWorld(GenericWorld):
         self.logger.info(f"WRAPPING UP ROUND #{self.round}")
         # Clean up survivors
         for a in self.active_agents:
+            if self.step < s.MAX_STEPS:
+                a.add_event(e.COLLECTED_EVERYTHING)
             a.add_event(e.SURVIVED_ROUND)
 
         # Send final event to agents that expect them

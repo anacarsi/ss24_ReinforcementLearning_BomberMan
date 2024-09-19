@@ -6,3 +6,4 @@ score_hist*
 model*
 *.pth
 *.npy
+./__pycache__/*
