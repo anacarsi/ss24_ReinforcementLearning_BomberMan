@@ -3,12 +3,11 @@ import sys
 import pickle
 import numpy as np
 import networkx as nx
-from objective import Objective
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, parent_dir)
 
-import settings as s
+ACTIONS = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'WAIT', 'BOMB']
 
 def setup(self):
     """
@@ -38,167 +37,137 @@ def load_model(self):
 
 def act(self, game_state: dict) -> str:
     """
-    Decide the next action based on the current game state using an epsilon-greedy policy and Q-values.
-    
-    :param game_state: A dictionary containing the current state of the game.
-    :return: The action to be taken as a string.
-    """
-    action = self.model.choose_action(game_state)
+    Choose the next action based on the current state using an epsilon-greedy policy and Q-values.
 
+    :param state: The current state of the game.
+    """
+    field, bombs, vision = state_to_features(self, game_state)
+    can_place_bomb = game_state['self'][2]
+    player_pos = game_state['self'][3]
+    vision_bombs = create_vision(self, bombs, player_pos)
+    self.state = (vision.tobytes(), vision_bombs.tobytes(), can_place_bomb)
+
+    if np.random.random() > self.model.epsilon:
+        action = np.argmax(self.q_table.get(self.state, [-10] * 6))
+    else:
+        action = np.random.randint(0, 6)
+
+    self.action = action 
     self.logger.info(f"Choosing action: {action} for state: {game_state}")
 
-def state_to_features(game_state: dict) -> np.array:
-    """
-    Converts the game state to the input of the Q-learning agent.
-    """
-    if game_state is None:
-        return None
+    return ACTIONS[action]
 
-    field = game_state['field']
-    features = []
-    
-    # 1. Player position
-    player_pos = game_state['self'][3]
-    features.append(player_pos[0])
-    features.append(player_pos[1])
-    
-    # 2. Coins and Crates
-    coins = game_state['coins']
-    crates = np.argwhere(field == -2)
-    features.append(len(coins))
-    features.append(len(crates))
-
-    # Convert features to a numpy array
-    return np.array(features)
-
-    """
-    import numpy as np
 
 def state_to_features(self, game_state: dict) -> np.ndarray:
-    
+    """
     Converts the game state to the input of the Q-learning agent, including field and bomb map calculations.
 
     :param game_state: Dictionary describing the current game state.
-    :return: Numpy array of features including the field and bomb map.
+    :return: Numpy array of features including the field, bomb map, and agent's vision.
+    """
+
+    # Step 1: Build the game field and encode relevant entities
+    field = field_to_features(self, game_state)
     
-    if game_state is None:
-        return None
-
-    field = game_state['field']
-    bombs = game_state.get('bombs', [])
-    explosion_map = game_state.get('explosion_map', np.zeros((7, 7), dtype=int))
+    # Step 2: Generate the bomb map based on bomb timers and positions
+    bomb_map = bombs_to_features(self, game_state, field)
     
-    # Initialize bomb map
-    bomb_map = np.full((7, 7), 6)
-
-    # Process bombs to update the bomb map
-    for bomb in bombs:
-        bomb_center_x, bomb_center_y = bomb[0]
-        bomb_timer = bomb[1] + 1
-
-        # Define affected tiles for each direction
-        affected_tiles_up = [(bomb_center_x, bomb_center_y), (bomb_center_x, bomb_center_y - 1)]
-        affected_tiles_down = [(bomb_center_x, bomb_center_y + 1)]
-        affected_tiles_left = [(bomb_center_x - 1, bomb_center_y)]
-        affected_tiles_right = [(bomb_center_x + 1, bomb_center_y)]
-
-        # Update bomb map for each direction
-        for tile in affected_tiles_up + affected_tiles_down + affected_tiles_left + affected_tiles_right:
-            x, y = tile
-            if 0 <= x < 7 and 0 <= y < 7 and field[x, y] != -1:
-                bomb_map[x, y] = min(bomb_map[x, y], bomb_timer)
-
-    # Adjust field based on crates, coins, explosions, and bomb map
-    field_adjusted = field.copy()
-    field_adjusted[field == 1] = -2  # Crates
-
-    # Set explosion tiles to 1
-    field_adjusted[explosion_map == 1] = 1
-
-    # Update field based on bomb map countdown
-    for i in range(1, 5):
-        field_adjusted[bomb_map == i] = i
-
-    # Update field with coins
-    coins = game_state.get('coins', [])
-    objective = self.set_objetive(game_state)
-    if objective in coins and field_adjusted[objective] not in {0, 1, 2, 3, 4}:
-        field_adjusted[objective] = -3
-
-    # Extract features
+    # Step 3: Extract the agent's vision with a specific radius
     player_pos = game_state['self'][3]
-    features = [
-        player_pos[0],  # Player x position
-        player_pos[1],  # Player y position
-        len(coins),     # Number of coins
-        len(np.argwhere(field == -2))  # Number of crates
-    ]
+    vision = create_vision(self, field, player_pos)
+    
+    # Step 4: Flatten and concatenate field, bomb map, and vision into a single feature vector
+    return field, bomb_map, vision
 
-    # Combine features and field into a single array
-    features = np.array(features)
-    return features, field_adjusted, bomb_map
-
+def bombs_to_features(self, game_state: dict, field: np.ndarray) -> np.ndarray:
     """
-
+    Generates a bomb map based on the game state, considering bomb timers and walls.
+    
+    :param game_state: The dictionary containing the current game state.
+    :param field: The game field with walls and obstacles.
+    :return: A bomb map as a 2D numpy array, indicating bomb timers.
     """
-    import numpy as np
+    bomb_map = np.full_like(field, -1)  # Initialize bomb map with -1 (no bomb)
+    
+    for (bomb_pos, bomb_timer) in game_state['bombs']:
+        x, y = bomb_pos
+        timer = bomb_timer + 1  # Timer counts down
 
-def generate_view_explosion(self, game_state: dict) -> np.ndarray:
-    
-    Generates a bomb map based on the given game state. Each tile in the bomb map contains the timer value of the nearest bomb.
-    Parameters:
-    - game_state (dict): The current game state containing the field and bomb information.
-    Returns:
-    - bomb_map: A 2D array representing the bomb map, where each element represents the timer value of a bomb.
-    
-    field = game_state['field']
-    bombs = game_state.get('bombs', [])
-    
-    # Initialize bomb map with a large timer value (6, which is more than the maximum bomb timer)
-    bomb_map = np.full((7, 7), 6)
-
-    # Process each bomb
-    for (bomb_pos, bomb_timer) in bombs:
-        bomb_x, bomb_y = bomb_pos
-        bomb_timer += 1  # Increment bomb timer to reflect current state
-        
-        # Directions: up, down, left, right
-        directions = [
-            (0, -1),  # Up
-            (0, 1),   # Down
-            (-1, 0),  # Left
-            (1, 0)    # Right
+        # Define affected tiles (current bomb and its potential explosion range)
+        affected_tiles = [
+            [(x, y), (x, y - 1)],  # Up
+            [(x, y + 1)],          # Down
+            [(x - 1, y)],          # Left
+            [(x + 1, y)]           # Right
         ]
-        
-        # Update bomb map for the bomb's position and its affected tiles
-        for dx, dy in directions:
-            x, y = bomb_x, bomb_y
-            while True:
-                x += dx
-                y += dy
-                
-                # Check bounds and walls
-                if not (0 <= x < 7 and 0 <= y < 7) or field[x, y] == -1:
-                    break
-                
-                # Update bomb map with the minimum timer value
-                bomb_map[x, y] = min(bomb_map[x, y], bomb_timer)
-    
+
+        # Update bomb map for all affected tiles unless blocked by walls (-1 in field)
+        for direction in affected_tiles:
+            for tile in direction:
+                if not (0 <= tile[0] < field.shape[0] and 0 <= tile[1] < field.shape[1]):
+                    break  # Ensure tile is within bounds
+                if field[tile] == -1:
+                    break  # Wall blocks the bomb's effect
+                bomb_map[tile] = timer
+
+    # Incorporate any active explosions from the game state (explosions set the bomb timer to 1)
+    bomb_map[game_state['explosion_map'] == 1] = 1
+
     return bomb_map
 
+def field_to_features(self, game_state: dict) -> np.ndarray:
     """
+    Builds the game field with adjusted values for bombs, coins, and opponents.
+    
+    :param game_state: The dictionary containing the current game state.
+    :return: The game field encoded with relevant entities.
+    """
+    field = game_state['field'].copy()  # Copy the field (walls and empty spaces)
+    
+    # Encode bombs as 2 on the field
+    for bomb_pos, _ in game_state['bombs']:
+        field[bomb_pos] = 2
+
+    # Encode coins as 3 on the field
+    for coin_pos in game_state['coins']:
+        field[coin_pos] = 3
+
+    # Encode opponents as 4 on the field
+    for opponent in game_state['others']:
+        field[opponent[3]] = 4
+    
+    return field
+
+def create_vision(self, field: np.ndarray, player_pos: tuple, radius: int = 4) -> np.ndarray:
+    """
+    Generates the agent's vision grid centered on the player's position.
+    
+    :param field: The game field.
+    :param player_pos: The position of the player.
+    :param radius: The radius of the vision grid around the player.
+    :return: A (2*radius+1)x(2*radius+1) grid representing the agent's vision.
+    """
+    # Create an empty vision array
+    vision = np.zeros((2 * radius + 1, 2 * radius + 1)) 
+    x, y = player_pos
+    # Define the area around the player within the radius
+    left, right = max(0, x - radius), min(field.shape[0], x + radius + 1)
+    up, down = max(0, y - radius), min(field.shape[1], y + radius + 1)
+    
+    # Fill the vision grid with the corresponding tiles from the field
+    vision[(left - (x - radius)):(right - (x - radius)),
+           (up - (y - radius)):(down - (y - radius))] = field[left:right, up:down]
+
+    return vision
+
 
 class QLearningModel():
     def __init__(self):
         self.q_table = {}
-        self.epsilon = 1.0  # Exploration rate for epsilon-greedy
+        self.epsilon = 0.9
+        self.epsilon_decay = 0.9999
         self.epsilon_min = 0.1
-        self.epsilon_decay = 0.995
-        self.learning_rate = 0.1
-        self.discount_factor = 0.99
-        self.q_table = {} 
-        self.task = 2
-        self.define_task(self.task)
+        self.discount_factor = 0.8
 
     def define_task(self, task) -> None:
         """
@@ -224,22 +193,3 @@ class QLearningModel():
         """
         self.q_table = q_table
     
-    def choose_action(self, state) -> str:
-        """
-        Choose the next action based on the current state using an epsilon-greedy policy and Q-values.
-
-        :param state: The current state of the game.
-        """
-        objective = Objective(self.task, state)
-        closest_objective = objective.set_objective()
-
-        if np.random.random() < self.epsilon:
-            action = np.random.choice(self.actions)
-        else:
-            candidates = self.q_table.get(tuple(state), np.zeros(len(self.actions)))
-            action = self.actions[np.argmax(candidates)]
-        
-        # Decay epsilon
-        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
-
-        return action
