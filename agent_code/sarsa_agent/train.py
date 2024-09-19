@@ -20,39 +20,21 @@ ACTIONS = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'WAIT', 'BOMB']
 
 def setup_training(self):
     """
-    Initialize the agent for training with SARSA.
+    Initialize the agent for training. Potential-Based Reward Shaping initialization: maxreward_episode = -inf, minreward_episode = inf, reward_episode = 0.
+    This method is called after `setup` in callbacks.py.
     """
-    self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)  # Store state-action transitions
-    self.q_table = {}  # Initialize Q-table as a dictionary
-    self.max_reward_eps = -10000  # Maximum reward for an episode
-    self.min_reward_eps = 100000  # Minimum reward for an episode
-    self.total_reward = 0  # Total reward for current episode
-    self.reward_episode = 0  # Reward for this episode
-    self.epsilon = 0.9  # Epsilon for epsilon-greedy policy
-    self.replay_buffer = []  # Store experiences for learning
-    self.eps = 0  # Episode counter
-
- 
-def game_events_occurred_old(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
-    """
-    Called once per step to allow intermediate rewards based on game events.
-    
-    Update the agent's Q-table or policy based on game events that occurred during the step.
-    """
-    self.logger.debug(f'Encountered game event(s): {", ".join(map(repr, events))} in step {new_game_state["step"]}')
-    
-    # Convert states to features using the provided helper function
-    old_state = state_to_features(self, old_game_state)
-    new_state = state_to_features(self, new_game_state)
-    
-    # Calculate reward from events
-    reward = reward_from_events(self, events)
-    
-    # Append the transition (state, action, reward, next_state) to the deque
-    self.transitions.append(Transition(old_state, self_action, new_state, reward))
-    
-    # Update Q-table with the new transition
-    update_q_table(self, old_state, self_action, reward, new_state)
+    # Setup a deque to store transitions with a limited history size
+    self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
+    # Initialize training parameters
+    self.q_table = {}                       # Use a dictionary for more flexible state-action pairs
+    self.graph = []                         # To store metrics (for example, rewards over episodes)
+    self.total_reward = 0                   # TODO: update the total reward over episodes
+    self.eps = 0 
+    self.replay_buffer = []                 # allows for off-policy learning and learn from past experiences, breaks correlations between consecutive samples, improving learning stability
+    self.reward_episode = 0                 # Initialize the reward for the current episode
+    self.epsilon = 0.9
+    self.min_reward_eps = 100000            # Initialize the minimum reward for an episode
+    self.max_reward_eps = -100000           # Initialize the maximum reward for an episode
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     """
@@ -110,24 +92,26 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # Save the current experience to the replay buffer
     self.replay_buffer.append((self.state, self.action, step_reward, potential_psi, new_state))
 
-    # ------------------- Q-LEARNING UPDATE -------------------
-    # Calculate the maximum future Q-value for the new state
-    future_q_values = self.q_table.get(new_state, [-10] * 6)  # Get future state Q-values (initialize with -10 if state not seen)
-    max_future_q = np.max(future_q_values)
+    # ------------------- SARSA UPDATE -------------------
+    next_action = choose_action(self, new_state)  # Choose the next action using epsilon-greedy policy
 
     # Get the current Q-value for the state-action pair
-    current_q_values = self.q_table.get(self.state, [-10] * 6)  # Get current state Q-values (initialize with -10 if state not seen)
-    old_q_value = current_q_values[self.action]
+    current_q_value = self.q_table.get(self.state, [-10] * len(ACTIONS))[self.action]
 
-    # Update the Q-value using the Q-learning formula: Q(s, a) ← (1 - α) * Q(s, a) + α * (r + γ * max_a' Q(s', a'))
-    new_q_value = (1 - LEARNING_RATE) * old_q_value + LEARNING_RATE * (step_reward + DISCOUNT_FACTOR * max_future_q)
+    # Get the next Q-value for the next state-action pair
+    # next_q_value = self.q_table.get(new_state, [-10] * 6)[next_action]
+    next_q_value = 23
+
+    # SARSA update rule: Q(s, a) = Q(s, a) + α * [r + γ * Q(s', a') - Q(s, a)]
+    # SARSA is an on-policy algorithm, updates the Q-value based on the immediate reward
+    updated_q_value = current_q_value + LEARNING_RATE * (step_reward + DISCOUNT_FACTOR * next_q_value - current_q_value)
 
     # If the state is not yet in the Q-table, initialize it with default Q-values
-    if self.state not in self.q_table:
-        self.q_table[self.state] = [-10] * 6
+    if self.state not in self.q_table: # old_state?
+        self.q_table[self.state] = [-10] * len(ACTIONS)
 
     # Update the Q-value in the Q-table
-    self.q_table[self.state][self.action] = new_q_value
+    self.q_table[self.state][self.action] = updated_q_value
 
     # ------------------- RESET FOR NEXT STEP -------------------
     # Update state and action for the next step in the next iteration
@@ -178,12 +162,16 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         self.min_reward_eps = self.reward_episode
 
     # ------------------- UPDATE Q-TABLE FOR FINAL STATE -------------------
-    # Initialize state-action values in Q-table if the state is unseen
+    # Get the current Q-value for the last (state, action) pair
     if self.state not in self.q_table:
-        self.q_table[self.state] = [-10] * 6  # Initialize Q-values to -10 for each action
-    
-    # Update Q-value of the final action using reward
+        self.q_table[self.state] = [-10] * len(ACTIONS)
     self.q_table[self.state][self.action] += LEARNING_RATE * reward
+    
+    # Since it's the final state, there's no next action (next_q_value is 0)
+    # updated_q_value = current_q_value + LEARNING_RATE * (reward - current_q_value)
+    
+    # Update the Q-value in the Q-table
+    # self.q_table[last_state][ACTIONS.index(last_action)] = updated_q_value
 
     # ------------------- SAVE Q-TABLE PERIODICALLY -------------------
     # Every 1000 episodes, save the Q-table to a file
@@ -204,6 +192,18 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.eps += 1  # Increment the episode counter
     self.reward_episode = 0  # Reset the episode reward
     self.replay_buffer.clear()  # Clear the replay buffer for the next episode
+
+def choose_action(self, state):
+    """
+    Choose an action using an epsilon-greedy policy based on the current Q-table.
+    """
+    if np.random.random() > self.epsilon:
+        action = np.argmax(self.q_table.get(self.state, [-10] * len(ACTIONS)))
+    else:
+        action = np.random.randint(0, 6)
+    
+    return action
+
 
 def reward_from_events(self, events: List[str]) -> int:
     """
@@ -250,6 +250,23 @@ def update_q_table(self, state, action, reward, next_state):
     self.q_table[state][ACTIONS.index(action)] = current_q_value + LEARNING_RATE * (
         reward + DISCOUNT_FACTOR * max_next_q_value - current_q_value
     )
+
+def select_action(self, state):
+    """
+    Select an action based on the epsilon-greedy strategy.
+    
+    :param state: The current state in features.
+    :return: The chosen action.
+    """
+    if np.random.rand() < self.epsilon:
+        # Explore: Random action
+        return np.random.choice(ACTIONS)
+    else:
+        # Exploit: Best action based on Q-table
+        if state in self.q_table:
+            return ACTIONS[np.argmax(self.q_table[state])]
+        else:
+            return np.random.choice(ACTIONS)  # Random action if state not seen
 
 def log_training_progress(self, episode):
     """
