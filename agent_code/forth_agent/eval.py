@@ -1,12 +1,13 @@
+"""
+to use this file, set EVAL = True in settings.py
+"""
+
 from typing import List
 import torch
-
-
 import events as e
 import settings as s  # use to dynamiclly change the scenario
 from datetime import datetime
 from logging import Logger, INFO, DEBUG
-from .potential import potential_function
 BATCH_SIZE = 1200  # 2-3k
 # Hyper parameters -- DO modify
 TRANSITION_HISTORY_SIZE = 500_000  # keep only 1M last transitions
@@ -34,14 +35,13 @@ class DummySelf:
 
 def setup_training(self: DummySelf):
     self.logger.setLevel(LOG_LEVEL)
-    self.end_scores = [[],[],[],[]]
+    self.end_scores =[]
     
 
 def game_events_occurred(
     self: DummySelf, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]
 ):
-  print("test")
-
+  pass
 def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, events: List[str]):
     """
     Called at the end of each game or when the agent died to hand out final rewards.
@@ -57,9 +57,7 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
     """
     # self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
     score = last_game_state["self"][1]
-    for other_agent in last_game_state["others"]:
-
-        pass
+    self.end_scores.append(score)
 
 def enemy_game_events_occurred(
     self:DummySelf,

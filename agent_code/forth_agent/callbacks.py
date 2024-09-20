@@ -11,7 +11,7 @@ import logging
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
 
-INVERSE_TEMPERATURE = 10
+INVERSE_TEMPERATURE = 20
 
 #! check if cpu or cuda is selected
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")

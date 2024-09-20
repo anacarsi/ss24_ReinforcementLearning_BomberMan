@@ -1,0 +1,1 @@
+python main.py play --scenario loot-crate --agents forth_agent rule_based_agent --n-rounds 1 --train 0 --single-process --save-stats --continue-without-training

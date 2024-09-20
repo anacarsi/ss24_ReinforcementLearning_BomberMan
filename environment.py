@@ -530,8 +530,9 @@ class BombeRLeWorld(GenericWorld):
             # Send exit message to shut down agent
             self.logger.debug(f"Sending exit message to agent <{a.name}>")
             # todo multiprocessing shutdown
-            
-
+            if isinstance(a.backend,ProcessAgentBackend):
+                a.backend.process.kill()
+                a.backend.process.join()
 
 class GUI:
     def __init__(self, world: GenericWorld):

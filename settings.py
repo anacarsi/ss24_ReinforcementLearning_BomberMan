@@ -19,7 +19,7 @@ SCENARIOS = {
     # game is created in environment.py -> BombeRLeWorld -> build_arena()
 }
 MAX_AGENTS = 4
-EVAL = True
+EVAL = False
 
 # Round properties
 MAX_STEPS = 400

@@ -18,7 +18,7 @@ from settings import N_ROUNDS
 TRANSITION_HISTORY_SIZE = 500_000  # keep only 1M last transitions
 REQUIRE_HISTORY = 450_000  # 100k
 RECORD_ENEMY_TRANSITIONS = 1  # record enemy transitions with probability ...
-from .history import History
+from .history import History,HistoryPrioritized
 LOG_LEVEL = INFO
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
@@ -27,7 +27,7 @@ ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
 
 
 class DummySelf:
-    transitions: History
+    transitions: History | HistoryPrioritized
     logger: Logger
     epsilon: float
     model: torch.nn.Module
@@ -65,12 +65,14 @@ def setup_training(self: DummySelf):
     self.last_saved = datetime.now() 
     self.started_training = self.last_saved.strftime('%Y.%m.%d-%H.%M.%S')
     self.amount_saved = 0
-    self.transitions = History(TRANSITION_HISTORY_SIZE, self.logger)
-    self.model.train()  # check what this even does?
+    #self.transitions = History(TRANSITION_HISTORY_SIZE, self.logger)
+    self.transitions = HistoryPrioritized(TRANSITION_HISTORY_SIZE, self.logger)
+    
+    #self.model.train()  # check what this even does?
     self.epsilon = 0.05
     self.gamma = 0.97
     self.loss_method = torch.nn.MSELoss()
-    self.optimizer = torch.optim.Adam(self.model.parameters(), 5e-6)  # 00001 # 1e-5 for later
+    self.optimizer = torch.optim.Adam(self.model.parameters(), 1e-6)  # 00001 # 1e-5 for later
 
     self.loss = []
     self.score = []
@@ -78,10 +80,6 @@ def setup_training(self: DummySelf):
     self.target_network.to(device)
     self.target_network.load_state_dict(self.model.state_dict())
     self.trained = 0
-    # for bomb dropping and collection coins:
-    # s.SCENARIOS["loot-crate"]["CRATE_DENSITY"] = 0.7
-    #s.SCENARIOS["loot-crate"]["COIN_COUNT"] = 60
-    #s.MAX_STEPS = 140
 
     self.logger.setLevel(LOG_LEVEL)
 
@@ -103,7 +101,7 @@ def train(self: DummySelf):
         self.logger.info(f"trained at: {self.trained}, {self.transitions.wrapped} {self.transitions.index} epsilon down to: {self.epsilon} lr at {self.optimizer.param_groups[0]["lr"]}")
 
     self.optimizer.zero_grad()
-    state, action, next_state, reward = minibatch
+    state, action, next_state, reward,indices = minibatch
 
     #yi_arr = torch.zeros(BATCH_SIZE,device=device)  # store the mse.
     #q_value = torch.zeros(BATCH_SIZE,device=device)
@@ -111,18 +109,15 @@ def train(self: DummySelf):
     q_value = q_value.gather(1, action.unsqueeze(1)).squeeze()
     with torch.no_grad():
         target_q: torch.Tensor = self.target_network.forward(next_state)
-        #target_q_mask: torch.Tensor = ~target_q[:, 0].isnan()
         target_q = target_q.max(dim=1).values
-
-    
-    #yi_arr = reward + self.gamma * (target_q_mask * target_q).nan_to_num(0.0)
     yi_arr = reward + self.gamma * (target_q).nan_to_num(0.0)
     
     loss = self.loss_method(q_value, yi_arr)
-
     loss.backward()
     self.optimizer.step()
     self.loss.append(loss.item())
+    abs_td_err = abs((q_value.detach()-yi_arr))  # dont use squared loss, just absolute difference.
+    self.transitions.update(indices,abs_td_err)
     #self.logger.info(f"Loss is: {self.loss[-1]}")
 
 def game_events_occurred(
@@ -205,7 +200,7 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
         self.amount_saved += 1
         self.last_saved = now
         self.logger.info("saved snapshot")
-        self.epsilon = max(0.01,self.epsilon * 0.9)
+        self.epsilon = max(0.01,self.epsilon * 0.93)
         for param in self.optimizer.param_groups:
             param["lr"] = param["lr"]* 0.95
         self.logger.info(f"trained at: {self.trained}, wrapped: {self.transitions.wrapped} ,index: {self.transitions.index} epsilon down to: {self.epsilon} lr for 0th at {self.optimizer.param_groups[0]["lr"]}") 
@@ -213,15 +208,15 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
     if last_game_state["round"] % 100 ==47:
         torch.save(self.model.state_dict(),"model.pth")
 
-    if last_game_state["round"] == N_ROUNDS:  # it is the last round
-        now = datetime.now().isoformat()
+    # if last_game_state["round"] == N_ROUNDS:  # it is the last round
+    #     now = datetime.now().isoformat()
 
-        torch.save(self.model.state_dict(), f"{self.started_training}_finished_train_snapshot_model_{now}.pth")
-        torch.save(self.model.state_dict(), f"model.pth")
+    #     torch.save(self.model.state_dict(), f"{self.started_training}_finished_train_snapshot_model_{now}.pth")
+    #     torch.save(self.model.state_dict(), f"model.pth")
 
-        np.save(f"loss_history_{now}.npy", np.array(self.loss))
-        np.save(f"score_history_{now}.npy", np.array(self.score))
-        self.logger.info("training finished, saving finished")
+    #     np.save(f"loss_history_{now}.npy", np.array(self.loss))
+    #     np.save(f"score_history_{now}.npy", np.array(self.score))
+    #     self.logger.info("training finished, saving finished")
     if random.random() < 0.001:
         self.logger.info(f"train bei {self.trained}")
 
