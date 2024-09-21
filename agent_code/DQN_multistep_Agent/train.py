@@ -42,6 +42,15 @@ class DummySelf:
     target_network: ForthAgentModel
     trained: int
     score: list[int]
+    episodes: int
+    lists: dict[str, list] = {
+        "UP": [],
+        "RIGHT": [],
+        "DOWN": [],
+        "LEFT": [],
+        "WAIT": [],
+        "BOMB": [],
+    }
 
 
 def end_training(self:DummySelf):
@@ -79,7 +88,16 @@ def setup_training(self: DummySelf):
     self.target_network.to(device)
     self.target_network.load_state_dict(self.model.state_dict())
     self.trained = 0
-
+    self.episodes = 0
+    lists: dict[str, list] = {
+            "UP": [],
+            "RIGHT": [],
+            "DOWN": [],
+            "LEFT": [],
+            "WAIT": [],
+            "BOMB": [],
+        }
+    
     self.logger.setLevel(LOG_LEVEL)
 
 
@@ -93,7 +111,7 @@ def train(self: DummySelf):
         self.logger.info(f"not enough experience. The buffer len was: {minibatch} vs {REQUIRE_HISTORY} required")
         return 
     #update target network each 200 episodes
-    if self.trained % 200 == 0:
+    if self.episodes % 200 == 0:
         #np.save(f"{self.started_training}_loss_history.npy", np.array(self.loss))
         #np.save(f"{self.started_training}_score_history.npy", np.array(self.score))
         self.target_network.load_state_dict(self.model.state_dict())
@@ -102,32 +120,29 @@ def train(self: DummySelf):
 
     self.optimizer.zero_grad()
     state, action, next_state, reward = minibatch
-
-    q_value: torch.Tensor = self.model.forward(state)
-    q_value = q_value.gather(1, action.unsqueeze(1)).squeeze()
-    with torch.no_grad():
-        target_q: torch.Tensor = self.target_network.forward(next_state)
-        target_q = target_q.max(dim=1).values
-        #compute rewards taking the same action for the next STEPS_FUTURE steps
-        rewards = [reward]
-        gammas = [self.gamma]
-        for i in range(2, STEPS_FUTURE):
-            next_state = self.target_network.forward(next_state).max(dim=1).indices
-            reward = self.transitions.reward[next_state]
-            rewards.append(reward)
-            gammas.append(gammas[-1]*self.gamma)
+    gammas = [1, self.gamma]
+    for i in range(1, STEPS_FUTURE + 1):
         gammas.append(gammas[-1]*self.gamma)
-        #compute truncated n-step return
+    if self.transitions.nextkrewards_kstate(action, next_state, reward, self.lists) is not None:
+        rewards, states = self.transitions.nextkrewards_kstate(action, next_state, reward, self.lists)
         reward = sum([r*g for r,g in zip(rewards,gammas)])
-
-    #TD target with multistep learning
-    yi_arr = reward + gammas[-1] * (target_q).nan_to_num(0.0)
-    loss = self.loss_method(q_value, yi_arr)
-
-    loss.backward()
-    self.optimizer.step()
-    self.loss.append(loss.item())
-
+        self.transitions[3, reward]
+        q_value: torch.Tensor = self.model.forward(states[0])
+        q_value = q_value.gather(1, action.unsqueeze(1)).squeeze()
+        with torch.no_grad():
+            target_q: torch.Tensor = self.target_network.forward(states[1])
+            target_q = target_q.max(dim=1).values
+        yi_arr = reward + gammas[-1] * (target_q).nan_to_num(0.0)
+        loss = self.loss_method(q_value, yi_arr)
+    else:
+        q_value: torch.Tensor = self.model.forward(state)
+        q_value = q_value.gather(1, action.unsqueeze(1)).squeeze()
+        with torch.no_grad():
+            target_q: torch.Tensor = self.target_network.forward(next_state)
+            target_q = target_q.max(dim=1).values
+        yi_arr = reward + self.gamma * (target_q).nan_to_num(0.0)
+        loss = self.loss_method(q_value, yi_arr)
+        
 
 def game_events_occurred(
     self: DummySelf, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]
@@ -158,6 +173,7 @@ def game_events_occurred(
         state_to_features(new_game_state)[0],
         reward_from_events(self, "forth_agent", events, add_reward),
     )
+    train(self) 
 
 def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, events: List[str]):
     """
@@ -169,6 +185,7 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
 
     :param self: The same object that is passed to all of your callbacks.
     """
+    self.episodes += 1
     # self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
     end_potential = potential_function(last_game_state, got_killed=(e.GOT_KILLED in events))
     # Using the event could seem like a violation fo the potential rule, but GOT_KILLED is actually a
@@ -194,14 +211,14 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
             param["lr"] = param["lr"]* 0.95
         self.logger.info(f"trained at: {self.trained}, wrapped: {self.transitions.wrapped} ,index: {self.transitions.index} epsilon down to: {self.epsilon} lr for 0th at {self.optimizer.param_groups[0]["lr"]}") 
     
-    #resetting epsilon and learning rate every 20_000 episodes
+    #resetting epsilon and learning rate every 20_000 steps
     if self.trained % 20_000 == 0:
         self.epsilon = 0.05
         for param in self.optimizer.param_groups:
             param["lr"] = 5e-6
        
     # Store the model, to allow reloading it by simultaniously playing agents which are not training
-    if last_game_state["round"] % 100 ==47:
+    if last_game_state["round"] % 100 ==47 or self.episodes%1000 == 0:
         torch.save(self.model.state_dict(),"model.pth")
 
     if random.random() < 0.001:

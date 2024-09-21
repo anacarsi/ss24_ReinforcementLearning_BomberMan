@@ -20,7 +20,7 @@ RECORD_ENEMY_TRANSITIONS = 1  # record enemy transitions with probability ...
 from .history import History
 LOG_LEVEL = INFO
 #Hyperparameters of discounted multistep learning
-STEPS_FUTURE = 4 
+STEPS_FUTURE = 7
 DISCOUNT_FACTOR = 1 #rewritten later to be gamma^STEPS_FUTURE
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
@@ -203,6 +203,7 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
         self.epsilon = 0.05
         for param in self.optimizer.param_groups:
             param["lr"] = 5e-6
+        self.logger.info(f"")
        
     # Store the model, to allow reloading it by simultaniously playing agents which are not training
     if last_game_state["round"] % 100 ==47:

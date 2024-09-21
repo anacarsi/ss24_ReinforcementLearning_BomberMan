@@ -17,7 +17,7 @@ SCENARIOS = {
     # Feel free to add more game modes and properties
     # game is created in environment.py -> BombeRLeWorld -> build_arena()
 }
-MAX_AGENTS = 4
+MAX_AGENTS = 1
 EVAL = True
 
 # Round properties
