@@ -17,12 +17,12 @@ from settings import N_ROUNDS
 # Hyper parameters -- DO modify
 TRANSITION_HISTORY_SIZE = 500_000  # keep only 1M last transitions
 REQUIRE_HISTORY = 450_000  # 100k
-RECORD_ENEMY_TRANSITIONS = 1  # record enemy transitions with probability ...
+RECORD_ENEMY_TRANSITIONS = 0  # record enemy transitions with probability ...
 from .history import History,HistoryPrioritized
 LOG_LEVEL = INFO
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
-
+from settings import SCENARIOS
 # Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
 
 
@@ -69,10 +69,10 @@ def setup_training(self: DummySelf):
     self.transitions = HistoryPrioritized(TRANSITION_HISTORY_SIZE, self.logger)
     
     #self.model.train()  # check what this even does?
-    self.epsilon = 0.05
+    self.epsilon = 0.1
     self.gamma = 0.97
     self.loss_method = torch.nn.MSELoss()
-    self.optimizer = torch.optim.Adam(self.model.parameters(), 1e-6)  # 00001 # 1e-5 for later
+    self.optimizer = torch.optim.Adam(self.model.parameters(), 4e-6)  # 00001 # 1e-5 for later
 
     self.loss = []
     self.score = []
@@ -93,7 +93,7 @@ def train(self: DummySelf):
         self.trained = 0
         self.logger.info(f"not enough experience. The buffer len was: {minibatch} vs {REQUIRE_HISTORY} required")
         return 
-    if self.trained % 200 == 0:
+    if self.trained % 100 == 0:
         np.save(f"{self.started_training}_loss_history.npy", np.array(self.loss))
         np.save(f"{self.started_training}_score_history.npy", np.array(self.score))
         self.target_network.load_state_dict(self.model.state_dict())
@@ -101,7 +101,7 @@ def train(self: DummySelf):
         self.logger.info(f"trained at: {self.trained}, {self.transitions.wrapped} {self.transitions.index} epsilon down to: {self.epsilon} lr at {self.optimizer.param_groups[0]["lr"]}")
 
     self.optimizer.zero_grad()
-    state, action, next_state, reward,indices = minibatch
+    state, action, next_state, reward,indices,weights = minibatch
 
     #yi_arr = torch.zeros(BATCH_SIZE,device=device)  # store the mse.
     #q_value = torch.zeros(BATCH_SIZE,device=device)
@@ -110,14 +110,16 @@ def train(self: DummySelf):
     with torch.no_grad():
         target_q: torch.Tensor = self.target_network.forward(next_state)
         target_q = target_q.max(dim=1).values
-    yi_arr = reward + self.gamma * (target_q).nan_to_num(0.0)
+    yi_arr = reward + self.gamma * (target_q).nan_to_num(0.0) 
     
-    loss = self.loss_method(q_value, yi_arr)
+    #loss = self.loss_method(q_value, yi_arr) # weights missing
+    abs_td_err = (q_value-yi_arr).abs() # needed for history update
+    abs_td_err_copy = abs_td_err.detach().clone()  # dont use squared loss, just absolute difference.
+    loss = (abs_td_err.pow(2) * weights).mean()
     loss.backward()
     self.optimizer.step()
     self.loss.append(loss.item())
-    abs_td_err = abs((q_value.detach()-yi_arr))  # dont use squared loss, just absolute difference.
-    self.transitions.update(indices,abs_td_err)
+    self.transitions.update(indices,abs_td_err_copy)
     #self.logger.info(f"Loss is: {self.loss[-1]}")
 
 def game_events_occurred(
@@ -146,11 +148,26 @@ def game_events_occurred(
     #     events.append(PLACEHOLDER_EVENT)
 
     # state_to_features is defined in callbacks.py
+
     old_potential = potential_function(old_game_state, False)
     new_potential = potential_function(new_game_state, False)
     add_reward = self.gamma * new_potential - old_potential
     old_transformed_state,x_flip,y_flip,transpose = state_to_features(old_game_state)
     new_action = ACTIONS.index(apply_mutations_to_action(x_flip,y_flip,transpose, self_action))
+
+
+    # xp,yp = old_game_state["self"][3]
+    # for agent in old_game_state["others"]:
+    #     x,y = agent[3]
+    #     dist = abs(x - xp) + abs(y - yp)
+    #     if dist < 5:
+    #         if e.BOMB_DROPPED in events:
+    #             add_reward+= 15
+    #             break
+    # if e.BOMB_EXPLODED in events:
+    #     add_reward-=15
+
+
     self.transitions.append(
         old_transformed_state,
         new_action,
@@ -173,6 +190,8 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
     :param self: The same object that is passed to all of your callbacks.
     """
     # self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
+
+
     end_potential = potential_function(last_game_state, got_killed=(e.GOT_KILLED in events))
     # Using the event could seem like a violation fo the potential rule, but GOT_KILLED is actually a
     # property of the state, so this is fine.
@@ -200,10 +219,13 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
         self.amount_saved += 1
         self.last_saved = now
         self.logger.info("saved snapshot")
-        self.epsilon = max(0.01,self.epsilon * 0.93)
-        for param in self.optimizer.param_groups:
-            param["lr"] = param["lr"]* 0.95
-        self.logger.info(f"trained at: {self.trained}, wrapped: {self.transitions.wrapped} ,index: {self.transitions.index} epsilon down to: {self.epsilon} lr for 0th at {self.optimizer.param_groups[0]["lr"]}") 
+
+        if SCENARIOS["loot-crate"]["COIN_COUNT"] <= 10:
+            self.epsilon = max(0.01,self.epsilon * 0.95)
+            for param in self.optimizer.param_groups:
+                param["lr"] = param["lr"]* 0.96
+            self.logger.info(f"trained at: {self.trained}, wrapped: {self.transitions.wrapped} ,index: {self.transitions.index} epsilon down to: {self.epsilon} lr for 0th at {self.optimizer.param_groups[0]["lr"]}") 
+        SCENARIOS["loot-crate"]["COIN_COUNT"] = max(9,SCENARIOS["loot-crate"]["COIN_COUNT"]-3)
     # Store the model, to allow reloading it by simultaniously playing agents which are not training
     if last_game_state["round"] % 100 ==47:
         torch.save(self.model.state_dict(),"model.pth")
@@ -240,6 +262,7 @@ def enemy_game_events_occurred(
     new_potential = potential_function(enemy_game_state, False)
     add_reward = self.gamma * new_potential - old_potential
     old_transformed_state,x_flip,y_flip,transpose = state_to_features(old_enemy_game_state)
+    
     self.transitions.append(
         old_transformed_state,
         ACTIONS.index(apply_mutations_to_action(x_flip,y_flip,transpose, enemy_action)),
@@ -257,6 +280,8 @@ def reward_from_events(self, agent_name, events: List[str], add=0) -> int:
     """
     game_rewards = {e.COIN_COLLECTED: 10, e.KILLED_OPPONENT: 50, e.INVALID_ACTION: -10}  # official  # official
 
+    if e.KILLED_OPPONENT in events:
+        self.logger.info("Got a kill!!")
     reward_sum = add  # add custo rewards
     for event in events:
         if event in game_rewards:

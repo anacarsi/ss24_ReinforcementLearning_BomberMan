@@ -1,0 +1,1 @@
+latest train is 19.09. 21.23 the agent only plays actively when an opponent is near

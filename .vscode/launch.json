@@ -19,10 +19,11 @@
                 "forth_agent",
                 "rule_based_agent",
                 "--n-rounds",
-                "1",
+                "1000",
                 "--train",
-                "0",
-                "--continue-without-training"
+                "1",
+                "--continue-without-training",
+                "--no-gui"
                 //"--no-gui",
             ]
         }

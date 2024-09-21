@@ -117,9 +117,12 @@ def coin_hunter(state, got_killed):
     reward = max(5 - coin_dist, 0)
     return reward
 
-def potential_function(state, got_killed):
+
+
+def potential_function(state, got_killed = False):
     # got killed is implicitly part of the state, but gets passed
     # anyway, so we do not need to compute it
     reward = bomb_place_incentive(state, got_killed)
     #reward = coin_hunter(state,got_killed)
+    #reward += kill_incentive(state,got_killed)
     return reward
