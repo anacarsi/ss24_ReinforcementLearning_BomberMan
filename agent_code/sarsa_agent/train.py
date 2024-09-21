@@ -1,6 +1,7 @@
 from collections import namedtuple, deque
 import numpy as np
 import pickle
+import json
 from typing import List
 import events as e
 from .callbacks import state_to_features, create_vision
@@ -35,6 +36,7 @@ def setup_training(self):
     self.epsilon = 0.9
     self.min_reward_eps = 100000            # Minimum value of episode until now
     self.max_reward_eps = -100000           # Maximum value of episode until now
+    self.replay_data = []                   # Store replay data for training
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     """
@@ -48,8 +50,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     :param new_game_state: The resulting game state after taking the action.
     :param events: The list of events that occurred between the old and new game state.
     """
-
-        # ------------------- NEW STATE CONSTRUCTION -------------------
+    # ------------------- NEW STATE CONSTRUCTION -------------------
     # Extract necessary information to build the new state representation
     field_representation, bombs, vision_field = state_to_features(self, new_game_state)  # Generate field map with bombs, crates, etc.
     can_place_bomb = new_game_state['self'][2] 
@@ -100,7 +101,17 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # ------------------- RESET FOR NEXT STEP -------------------
     # Update state and action for the next step in the next iteration
     self.state = new_state
-    self.action = next_action
+    # self.action = next_action
+
+    # ------------------- REPLAY -------------------
+    # Store the transition in replay data
+    transition_data = {
+        'old_state': old_game_state,
+        'action': self_action,
+        'reward': step_reward,
+        'new_state': new_game_state
+    }
+    self.replay_data.append(transition_data)  # Collect replay data for training
 
 def potential_function(self, reward_episode, max_reward_eps, min_reward_eps):
     """
@@ -192,6 +203,11 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.reward_episode = 0  # Reset the episode reward
     self.replay_buffer.clear()  # Clear the replay buffer for the next episode
 
+    # Save the replay data at the end of the episode
+    # save_replay(self.replay_data)
+    # Reset the replay data for the next episode
+    self.replay_data.clear()
+
 def choose_action(self, state):
     """
     Choose an action using an epsilon-greedy policy based on the current Q-table.
@@ -202,27 +218,6 @@ def choose_action(self, state):
         return np.argmax(self.q_table.get(state, [-10] * len(ACTIONS)))
     else:
         return np.random.randint(0, 6)
-
-
-def reward_from_events(self, events: List[str]) -> int:
-    """
-    Calculate reward from the game events that occurred during a step.
-    
-    Customize rewards to encourage or discourage specific agent behaviors.
-    """
-    game_rewards = {
-        e.SURVIVED_ROUND: 1,
-        e.KILLED_OPPONENT: 5,
-        e.CRATES_DESTROYED: 3,
-        e.BOMB_DROPPED: -1,
-        e.INVALID_ACTION: -1,
-        e.KILLED_SELF: -100,
-    }
-    
-    # Sum up the rewards from the events
-    reward_sum = sum(game_rewards.get(event, 0) for event in events)
-    self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
-    return reward_sum
 
 def update_q_table(self, state, action, reward, next_state):
     """
@@ -250,23 +245,6 @@ def update_q_table(self, state, action, reward, next_state):
         reward + DISCOUNT_FACTOR * max_next_q_value - current_q_value
     )
 
-def select_action(self, state):
-    """
-    Select an action based on the epsilon-greedy strategy.
-    
-    :param state: The current state in features.
-    :return: The chosen action.
-    """
-    if np.random.rand() < self.epsilon:
-        # Explore: Random action
-        return np.random.choice(ACTIONS)
-    else:
-        # Exploit: Best action based on Q-table
-        if state in self.q_table:
-            return ACTIONS[np.argmax(self.q_table[state])]
-        else:
-            return np.random.choice(ACTIONS)  # Random action if state not seen
-
 def log_training_progress(self, episode):
     """
     Log the agent's training progress, e.g., the average reward over recent episodes.
@@ -276,3 +254,13 @@ def log_training_progress(self, episode):
     # Example: Log the average reward over the last 100 episodes
     avg_reward = sum(self.graph[-100:]) / 100 if len(self.graph) >= 100 else sum(self.graph) / len(self.graph)
     self.logger.info(f"Episode {episode}: Average Reward: {avg_reward}")
+
+def save_replay(replay_data, filename="replay.json"):
+    """
+    Save replay data to a JSON file.
+    
+    :param replay_data: The replay data containing game states and transitions.
+    :param filename: The name of the file to save the replay data.
+    """
+    with open(filename, 'w') as f:
+        json.dump(replay_data, f)

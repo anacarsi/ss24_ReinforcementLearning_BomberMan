@@ -1,5 +1,6 @@
 from collections import namedtuple, deque
 import numpy as np
+import json
 import pickle
 from typing import List
 import events as e
@@ -23,14 +24,16 @@ def setup_training(self):
     Initialize the agent for training with SARSA.
     """
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)  # Store state-action transitions
-    self.q_table = {}  # Initialize Q-table as a dictionary
-    self.max_reward_eps = -10000  # Maximum reward for an episode
-    self.min_reward_eps = 100000  # Minimum reward for an episode
-    self.total_reward = 0  # Total reward for current episode
-    self.reward_episode = 0  # Reward for this episode
-    self.epsilon = 0.9  # Epsilon for epsilon-greedy policy
-    self.replay_buffer = []  # Store experiences for learning
-    self.eps = 0  # Episode counter
+    self.q_table = {}                       # Use a dictionary for more flexible state-action pairs
+    self.graph = []                         # To store metrics (for example, rewards over episodes)
+    self.total_reward = 0                   # TODO: update the total reward over episodes
+    self.eps = 0 
+    self.replay_buffer = []                 # Allows for off-policy learning and learn from past experiences, breaks correlations between consecutive samples, improving learning stability
+    self.reward_episode = 0                 # Sum of rewards in current episode
+    self.epsilon = 0.9
+    self.min_reward_eps = 100000            # Minimum value of episode until now
+    self.max_reward_eps = -100000           # Maximum value of episode until now
+    self.replay_data = []                   # Store the replay data for training
 
  
 def game_events_occurred_old(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -96,16 +99,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     self.reward_episode += step_reward  # Update the total reward for the episode
 
     # ------------------- POTENTIAL-BASED REWARD SHAPING (PBRS) -------------------
-    # The potential function (psi) adjusts the reward based on the current episode's progress.
-    # If no reward was earned (step_reward == 0), psi_s is set to 0, otherwise, it's shaped by past rewards.
-    if step_reward == 0:
-        potential_psi = 0
-    else:
-        # Normalize potential reward shaping using episode's min/max rewards
-        if self.max_reward_eps - self.min_reward_eps != 0:
-            potential_psi = 1 + (self.reward_episode - self.max_reward_eps) / (self.max_reward_eps - self.min_reward_eps)
-        else:
-            potential_psi = 1  # Avoid division by zero in the first few episodes
+    potential_psi = potential_function(self, self.reward_episode, self.max_reward_eps, self.min_reward_eps)
 
     # Save the current experience to the replay buffer
     self.replay_buffer.append((self.state, self.action, step_reward, potential_psi, new_state))
@@ -132,6 +126,33 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # ------------------- RESET FOR NEXT STEP -------------------
     # Update state and action for the next step in the next iteration
     self.state = new_state
+    # self.action = self_action
+
+    # ------------------- REPLAY -------------------
+    # Store the transition in replay data
+    transition_data = {
+        'old_state': old_game_state,
+        'action': self_action,
+        'reward': step_reward,
+        'new_state': new_game_state
+    }
+    self.replay_data.append(transition_data)
+
+def potential_function(self, reward_episode, max_reward_eps, min_reward_eps):
+    """
+    Calculate the potential-based reward shaping function psi_s.
+    
+    :param reward_episode: The total reward accumulated in the current episode.
+    :param max_reward_eps: The maximum reward achieved in any episode.
+    :param min_reward_eps: The minimum reward achieved in any episode.
+    :return: The potential-based reward shaping function psi_s.
+    """
+    if reward_episode == 0:
+        return 0
+    elif max_reward_eps - min_reward_eps != 0:
+        return 1 + (reward_episode - max_reward_eps) / (max_reward_eps - min_reward_eps)
+    else:
+        return 1
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     """
@@ -204,6 +225,23 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.eps += 1  # Increment the episode counter
     self.reward_episode = 0  # Reset the episode reward
     self.replay_buffer.clear()  # Clear the replay buffer for the next episode
+
+    # Save the replay data at the end of the episode
+    save_replay(self.replay_data)
+    # Reset the replay data for the next episode
+    self.replay_data.clear()
+
+
+def save_replay(replay_data, filename="replay.json"):
+    """
+    Save replay data to a JSON file.
+    
+    :param replay_data: The replay data containing game states and transitions.
+    :param filename: The name of the file to save the replay data.
+    """
+    with open(filename, 'w') as f:
+        json.dump(replay_data, f)
+
 
 def reward_from_events(self, events: List[str]) -> int:
     """
