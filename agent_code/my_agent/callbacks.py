@@ -138,7 +138,7 @@ def field_to_features(self, game_state: dict) -> np.ndarray:
     
     return field
 
-def create_vision(self, field: np.ndarray, player_pos: tuple, radius: int = 4) -> np.ndarray:
+def create_vision(self, field: np.ndarray, player_pos: tuple, radius: int = 8) -> np.ndarray:
     """
     Generates the agent's vision grid centered on the player's position.
     

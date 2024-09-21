@@ -30,11 +30,11 @@ def setup_training(self):
     self.graph = []                         # To store metrics (for example, rewards over episodes)
     self.total_reward = 0                   # TODO: update the total reward over episodes
     self.eps = 0 
-    self.replay_buffer = []                 # allows for off-policy learning and learn from past experiences, breaks correlations between consecutive samples, improving learning stability
-    self.reward_episode = 0                 # Initialize the reward for the current episode
+    self.replay_buffer = []                 # Allows for off-policy learning and learn from past experiences, breaks correlations between consecutive samples, improving learning stability
+    self.reward_episode = 0                 # Sum of rewards in current episode
     self.epsilon = 0.9
-    self.min_reward_eps = 100000            # Initialize the minimum reward for an episode
-    self.max_reward_eps = -100000           # Initialize the maximum reward for an episode
+    self.min_reward_eps = 100000            # Minimum value of episode until now
+    self.max_reward_eps = -100000           # Maximum value of episode until now
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     """
@@ -73,37 +73,21 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     if "COIN_COLLECTED" in events:
         step_reward += 10  # Reward for collecting coins
     if "KILLED_OPPONENT" in events:
-        step_reward += 10  # Reward for killing an opponent
+        step_reward += 50  # Reward for killing an opponent
 
     self.reward_episode += step_reward  # Update the total reward for the episode
 
     # ------------------- POTENTIAL-BASED REWARD SHAPING (PBRS) -------------------
-    # The potential function (psi) adjusts the reward based on the current episode's progress.
-    # If no reward was earned (step_reward == 0), psi_s is set to 0, otherwise, it's shaped by past rewards.
-    if step_reward == 0:
-        potential_psi = 0
-    else:
-        # Normalize potential reward shaping using episode's min/max rewards
-        if self.max_reward_eps - self.min_reward_eps != 0:
-            potential_psi = 1 + (self.reward_episode - self.max_reward_eps) / (self.max_reward_eps - self.min_reward_eps)
-        else:
-            potential_psi = 1  # Avoid division by zero in the first few episodes
-
+    potential_psi = potential_function(self, self.reward_episode, self.max_reward_eps, self.min_reward_eps)
     # Save the current experience to the replay buffer
     self.replay_buffer.append((self.state, self.action, step_reward, potential_psi, new_state))
 
     # ------------------- SARSA UPDATE -------------------
     next_action = choose_action(self, new_state)  # Choose the next action using epsilon-greedy policy
-
-    # Get the current Q-value for the state-action pair
     current_q_value = self.q_table.get(self.state, [-10] * len(ACTIONS))[self.action]
+    next_q_value = self.q_table.get(new_state, [-10] * 6)[next_action]
 
-    # Get the next Q-value for the next state-action pair
-    # next_q_value = self.q_table.get(new_state, [-10] * 6)[next_action]
-    next_q_value = 23
-
-    # SARSA update rule: Q(s, a) = Q(s, a) + α * [r + γ * Q(s', a') - Q(s, a)]
-    # SARSA is an on-policy algorithm, updates the Q-value based on the immediate reward
+    # SARSA update rule: Q(s, a) = Q(s, a) + α * [r + γ * Q(s', a') - Q(s, a)] updates the Q-value based on the immediate reward
     updated_q_value = current_q_value + LEARNING_RATE * (step_reward + DISCOUNT_FACTOR * next_q_value - current_q_value)
 
     # If the state is not yet in the Q-table, initialize it with default Q-values
@@ -116,6 +100,23 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # ------------------- RESET FOR NEXT STEP -------------------
     # Update state and action for the next step in the next iteration
     self.state = new_state
+    self.action = next_action
+
+def potential_function(self, reward_episode, max_reward_eps, min_reward_eps):
+    """
+    Calculate the potential-based reward shaping function psi_s.
+    
+    :param reward_episode: The total reward accumulated in the current episode.
+    :param max_reward_eps: The maximum reward achieved in any episode.
+    :param min_reward_eps: The minimum reward achieved in any episode.
+    :return: The potential-based reward shaping function psi_s.
+    """
+    if reward_episode == 0:
+        return 0
+    elif max_reward_eps - min_reward_eps != 0:
+        return 1 + (reward_episode - max_reward_eps) / (max_reward_eps - min_reward_eps)
+    else:
+        return 1
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     """
@@ -133,20 +134,18 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         reward += 100
     # if e.COLLECTED_EVERYTHING in events and e.SURVIVED_ROUND in events:
         # reward += 100
-    if e.SURVIVED_ROUND in events:
-        reward += 100
     if e.COIN_COLLECTED in events:
         reward += 10
     if e.KILLED_SELF in events:
-        reward -= 100
+        reward -= 1000
     if e.GOT_KILLED in events:
         reward -= 100
 
     self.reward_episode += reward  # Accumulate the total reward for this episode
 
-    # ------------------- Q-LEARNING WITH PBRS -------------------
+    # ------------------- SARSA WITH PBRS -------------------
     # Iterate backward through the replay buffer to apply potential-based reward shaping
-    for i in range(len(self.replay_buffer) - 2, -1, -1):
+    for i in range(len(self.replay_buffer) - 2, -1, -1): # skips the last element of the buffer, loop will stop when it reaches index 0
         (state, action, _, psi_s, next_state) = self.replay_buffer[i]
         (_, _, _, next_psi_s, _) = self.replay_buffer[i + 1]
         
@@ -156,9 +155,9 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # ------------------- TRACK MAXIMUM/MINIMUM REWARD -------------------
     # Update the max/min reward for the episode, only if reward_episode is non-zero
-    if self.reward_episode > self.max_reward_eps and self.reward_episode > 0:
+    if self.reward_episode > self.max_reward_eps and self.reward_episode > 0: # because we want to track the maximum positive reward
         self.max_reward_eps = self.reward_episode
-    elif self.reward_episode < self.min_reward_eps and self.reward_episode < 0:
+    elif self.reward_episode < self.min_reward_eps and self.reward_episode < 0: # because we want to track the minimum negative reward
         self.min_reward_eps = self.reward_episode
 
     # ------------------- UPDATE Q-TABLE FOR FINAL STATE -------------------
@@ -196,13 +195,13 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 def choose_action(self, state):
     """
     Choose an action using an epsilon-greedy policy based on the current Q-table.
+
+    :param state: The current state in features.
     """
     if np.random.random() > self.epsilon:
-        action = np.argmax(self.q_table.get(self.state, [-10] * len(ACTIONS)))
+        return np.argmax(self.q_table.get(state, [-10] * len(ACTIONS)))
     else:
-        action = np.random.randint(0, 6)
-    
-    return action
+        return np.random.randint(0, 6)
 
 
 def reward_from_events(self, events: List[str]) -> int:
