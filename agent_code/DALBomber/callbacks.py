@@ -11,12 +11,12 @@ import logging
 
 ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
 
-INVERSE_TEMPERATURE = 50
-
+INVERSE_TEMPERATURE =50
+#INVERSE_TEMPERATURE_1=20
 #! check if cpu or cuda is selected
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+OTHER_TRAIN = False
 
-    
 
 class ForthAgentModel(nn.Module):
     def __init__(self):
@@ -49,51 +49,58 @@ def setup(self):
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
-    if not os.path.isfile("./model.pth"):
-        raise Exception("no model created, please look at 'creation.ipnb' in this folder to initialize the model")
-
-    else:
-        self.logger.info("Loading model from saved state.")
-        # with open("my-saved-model.pt", "rb") as file:
-        #     # self.model = pickle.load(file)
-        #     self.model = torch.load(file)
-        self.logger.setLevel(logging.INFO)  # could get overwritten in train.py
+    #train:
+    if self.train:
+        if not os.path.isfile("./model.pth"):
+            raise Exception("no model created, please look at 'creation.ipnb' in this folder to initialize the model")
         self.model = ForthAgentModel()
         self.model.load_state_dict(torch.load("./model.pth", map_location=device))
         self.model.to(device, dtype=torch.float32)
-        self.epsilon = 0.0  # gets overwritten in training code anyway
+    else:
+        # inference:
+        if not os.path.isfile("./model_1.pth") or not os.path.isfile("./model_4.pth"):
+            raise Exception("no model created, please look at 'creation.ipnb' in this folder to initialize the model")
+        self.model = ForthAgentModel()
+        self.model.load_state_dict(torch.load("./model_4.pth", map_location=device))
+        self.model.to(device, dtype=torch.float32)
+        self.model_1= ForthAgentModel() # model 1 is used when only one agent is remaining
+        self.model_1.load_state_dict(torch.load("./model_1.pth",map_location=device))
+        self.model_1.to(device,dtype=torch.float32)
 
+
+    self.logger.info("Loading model from saved state.")
+    self.epsilon = 0.0  # gets overwritten in training code anyway
+    self.logger.setLevel(logging.INFO)  # could get overwritten in train.py
+
+    
 
 def act(self, game_state: dict) -> str:
 
-    # TODO: only do when other forth agent is training
-    if game_state["round"] % 100 == 50 and game_state["step"] == 1:
-        self.model.load_state_dict(torch.load("./model.pth", map_location=device))
+    # # only do when other forth agent is training
+    # if OTHER_TRAIN==True:
+    #     if game_state["round"] % 100 == 50 and game_state["step"] == 1:
+    #         self.model.load_state_dict(torch.load("./model.pth", map_location=device))
 
     """
-    Your agent should parse the input, think, and take a decision.
-    When not in training mode, the maximum execution time for this method is 0.5s.
-
     :param self: The same object that is passed to all of your callbacks.
     :param game_state: The dictionary that describes everything on the board.
     :return: The action to take as a string.
     """
-    if self.train and random.random() <= self.epsilon:
+    if self.train and random.random() < self.epsilon:
         return np.random.choice(ACTIONS, p=[0.2, 0.2, 0.2, 0.2, 0.1, 0.1])
-
-    # training is disabled or exploitation was rolled
-    # self.logger.debug("Querying model for action.")
-    # features, xflip, yflip = state_to_features(game_state)
-
     features, x_flip, y_flip, transpose = state_to_features(game_state)
-    # ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
+    # reminder: ACTIONS = ["UP", "RIGHT", "DOWN", "LEFT", "WAIT", "BOMB"]
     actions = [apply_mutations_to_action(x_flip, y_flip, transpose, action) for action in ACTIONS]
-
-    # dont use the softmax, as the model does not return probabilities, but rather q-values.
-    # beacause of this, I don't think we can just interpret them as probabilities and expect a good convergence.
-    # model_out = self.model.forward(features).detach().cpu().flatten().softmax(0, torch.float32).numpy()
     with torch.no_grad():
-        model_out = self.model.forward(features).flatten().cpu()
+        if self.train:
+            model_out = self.model.forward(features).flatten().cpu()
+        else:
+            if len(game_state["others"]) < 2:
+                self.logger.info("used 1")
+                model_out = self.model_1.forward(features).flatten().cpu()
+            else:
+                self.logger.info("used 4")
+                model_out = self.model.forward(features).flatten().cpu()
 
     q_vals = {x: y for x, y in zip(actions, model_out)}
     self.logger.debug(f"The actions were evaluated as follows: {q_vals.items()}")
@@ -103,7 +110,7 @@ def act(self, game_state: dict) -> str:
     #(This increases the probabilities of being picked of the actions with higher expected reward,
     # while the worse actions will get played even less)
     model_choice = np.random.choice(actions, p=probabilites)
-    # model_choice = ACTIONS[torch.argmax(model_out)]
+    #model_choice = actions[torch.argmax(model_out)]
 
     self.logger.debug(f"ACTION CHOSEN: {model_choice}")
     return model_choice

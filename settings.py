@@ -15,6 +15,7 @@ SCENARIOS = {
     "loot-crate": {"CRATE_DENSITY": 0.75, "COIN_COUNT": 50},
     # this is the tournament game mode
     "classic": {"CRATE_DENSITY": 0.75, "COIN_COUNT": 9},
+    "aprox-endgame" : {"CRATE_DENSITY": 0.16, "COIN_COUNT": 2}, # classic divided by 4.5 to simulate an endgame
     # Feel free to add more game modes and properties
     # game is created in environment.py -> BombeRLeWorld -> build_arena()
 }

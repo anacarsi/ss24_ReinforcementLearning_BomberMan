@@ -11,13 +11,13 @@ import numpy as np
 from logging import Logger, INFO, DEBUG
 
 from .potential import potential_function
-BATCH_SIZE = 1200  # 2-3k
+BATCH_SIZE = 3500  # 2-3k
 #EPISODES = 100_000  # 30k
 from settings import N_ROUNDS
 # Hyper parameters -- DO modify
 TRANSITION_HISTORY_SIZE = 500_000  # keep only 1M last transitions
 REQUIRE_HISTORY = 450_000  # 100k
-RECORD_ENEMY_TRANSITIONS = 0  # record enemy transitions with probability ...
+RECORD_ENEMY_TRANSITIONS = 0.5  # record enemy transitions with probability ...
 from .history import History,HistoryPrioritized
 LOG_LEVEL = INFO
 
@@ -69,10 +69,10 @@ def setup_training(self: DummySelf):
     self.transitions = HistoryPrioritized(TRANSITION_HISTORY_SIZE, self.logger)
     
     #self.model.train()  # check what this even does?
-    self.epsilon = 0.1
+    self.epsilon = 0.05
     self.gamma = 0.97
     self.loss_method = torch.nn.MSELoss()
-    self.optimizer = torch.optim.Adam(self.model.parameters(), 4e-6)  # 00001 # 1e-5 for later
+    self.optimizer = torch.optim.Adam(self.model.parameters(), 1e-6)  # 00001 # 1e-5 for later
 
     self.loss = []
     self.score = []
@@ -93,7 +93,7 @@ def train(self: DummySelf):
         self.trained = 0
         self.logger.info(f"not enough experience. The buffer len was: {minibatch} vs {REQUIRE_HISTORY} required")
         return 
-    if self.trained % 100 == 0:
+    if self.trained % 200 == 0:
         np.save(f"{self.started_training}_loss_history.npy", np.array(self.loss))
         np.save(f"{self.started_training}_score_history.npy", np.array(self.score))
         self.target_network.load_state_dict(self.model.state_dict())
@@ -209,8 +209,8 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
 
     self.logger.info(f"Score at end of round:  {score}")
 
-    now = datetime.now()
-    if now - self.last_saved > timedelta(minutes=15):
+    if self.trained% 1000 == 2:
+        now = datetime.now()
         torch.save(
             self.model.state_dict(),
             f"{self.started_training}_snapshot_{now.isoformat()}.pth",
@@ -220,25 +220,14 @@ def end_of_round(self: DummySelf, last_game_state: dict, last_action: str, event
         self.last_saved = now
         self.logger.info("saved snapshot")
 
-        if SCENARIOS["loot-crate"]["COIN_COUNT"] <= 10:
-            self.epsilon = max(0.01,self.epsilon * 0.95)
-            for param in self.optimizer.param_groups:
-                param["lr"] = param["lr"]* 0.96
-            self.logger.info(f"trained at: {self.trained}, wrapped: {self.transitions.wrapped} ,index: {self.transitions.index} epsilon down to: {self.epsilon} lr for 0th at {self.optimizer.param_groups[0]["lr"]}") 
-        SCENARIOS["loot-crate"]["COIN_COUNT"] = max(9,SCENARIOS["loot-crate"]["COIN_COUNT"]-3)
+        
+        self.epsilon = max(0.001,self.epsilon * 0.92)
+        for param in self.optimizer.param_groups:
+            param["lr"] = param["lr"]* 0.92
+    #self.logger.info(f"trained at: {self.trained}, wrapped: {self.transitions.wrapped} ,index: {self.transitions.index} epsilon down to: {self.epsilon} lr for 0th at {self.optimizer.param_groups[0]["lr"]}") 
     # Store the model, to allow reloading it by simultaniously playing agents which are not training
     if last_game_state["round"] % 100 ==47:
         torch.save(self.model.state_dict(),"model.pth")
-
-    # if last_game_state["round"] == N_ROUNDS:  # it is the last round
-    #     now = datetime.now().isoformat()
-
-    #     torch.save(self.model.state_dict(), f"{self.started_training}_finished_train_snapshot_model_{now}.pth")
-    #     torch.save(self.model.state_dict(), f"model.pth")
-
-    #     np.save(f"loss_history_{now}.npy", np.array(self.loss))
-    #     np.save(f"score_history_{now}.npy", np.array(self.score))
-    #     self.logger.info("training finished, saving finished")
     if random.random() < 0.001:
         self.logger.info(f"train bei {self.trained}")
 

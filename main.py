@@ -8,7 +8,7 @@ import settings as s
 from environment import BombeRLeWorld, GUI
 from fallbacks import pygame, LOADED_PYGAME
 from replay import ReplayWorld
-from datetime import datetime
+from datetime import datetime,timedelta
 import json
 ESCAPE_KEYS = (pygame.K_q, pygame.K_ESCAPE)
 
@@ -50,7 +50,13 @@ def world_controller(
             pygame.display.flip()
 
     user_input = None
+    last_adjusted = datetime.now()
     for _ in tqdm(range(n_rounds)):
+        # keep in mind that with process-backend, we cant mutate the scenarios
+        # as easily
+        # if datetime.now() - last_adjusted > timedelta(minutes=15):
+        #     s.SCENARIOS["loot-crate"]["COIN_COUNT"]= max(9,s.SCENARIOS["loot-crate"]["COIN_COUNT"]-5)
+        #     last_adjusted = datetime.now()
         world.new_round()
         while world.running:
             # Only render when the last frame is not too old

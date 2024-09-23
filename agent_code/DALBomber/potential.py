@@ -39,19 +39,21 @@ def is_safe(game_state, got_killed: bool):
         if xp == xb:
             if yp in range(yb - 3, yb + 4):
                 if (yb - yp) == 2:
-                    if field[(xp, yb - 1)] != 0:
+                    if field[(xp, yb - 1)] == -1: # Note: previously, a crate between you and the bomb would mark you as safe.                        
+                        # you are not safe if a crate is between you and the bomb.
+                        # you are only safe if its a wall
                         continue
                 elif (yp - yb) == 2:
-                    if field[(xp, yb + 1)] != 0:
+                    if field[(xp, yb + 1)] == -1:
                         continue
                 return False
         if yp == yb:
             if xp in range(xb - 3, xb + 3):
                 if (xb - xp) == 2:
-                    if field[(xp + 1, yb)] != 0:
+                    if field[(xp + 1, yb)] == -1:
                         continue
                 elif (xp - xb) == 2:
-                    if field[(xp - 1, yb)] != 0:
+                    if field[(xp - 1, yb)] == -1:
                         continue
                 return False
     return True
