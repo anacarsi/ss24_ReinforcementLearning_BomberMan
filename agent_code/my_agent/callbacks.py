@@ -73,14 +73,16 @@ def is_move_possible(game_state, x: int, y: int, direction: str) -> bool:
     :return: True if the move is possible, False otherwise.
     """
     field = game_state["field"]
+    if x < 0 or y >= field.shape[0] or x < 0 or y >= field.shape[1]:
+        return False  # Out of bounds
     if direction == "down":
-        return field[x, y + 1] == 0
+        return field[x, y + 1] != -1 and field[x, y + 1] != 1
     elif direction == "up":
-        return field[x, y - 1] == 0
+        return field[x, y - 1] != -1 and field[x, y - 1] != 1
     elif direction == "left":
-        return field[x - 1, y] == 0
+        return field[x - 1, y] != -1 and field[x - 1, y] != 1
     elif direction == "right":
-        return field[x + 1, y] == 0
+        return field[x + 1, y] != -1 and field[x + 1, y] != 1
     return True
     
 def nearest_coin(game_state, x: int, y: int) -> tuple:
@@ -111,7 +113,7 @@ def nearest_bomb(game_state, x: int, y: int) -> tuple:
         return None
     return min(bombs, key=lambda b: abs(b[0][0] - x) + abs(b[0][1] - y))
 
-def nearest_crater(game_state, x: int, y: int) -> tuple:
+def nearest_crate(game_state, x: int, y: int) -> tuple:
     """
     Find the nearest crate to the player's position.
 
@@ -124,7 +126,13 @@ def nearest_crater(game_state, x: int, y: int) -> tuple:
     crates = np.argwhere(field == 1)
     if len(crates) == 0:
         return None
-    return min(crates, key=lambda c: abs(c[0] - x) + abs(c[1] - y))   
+    nearest = min(crates, key=lambda c: abs(c[0] - x) + abs(c[1] - y))
+    
+    # Validate the nearest crate coordinates
+    if nearest[0] >= 0 and nearest[1] >= 0:
+        return nearest
+    else:
+        return None 
     
 def bomb_explosion_range(xb: int, yb: int, field: np.array) -> list:
     """
@@ -195,7 +203,7 @@ def state_to_features(game_state: dict) -> Features:
 
     (xb, yb), bomb_range = nearest_bomb_and_range(bombs, game_state, xp, yp)
     if xb is None or yb is None:
-        x_bomb, y_bomb = -1, -1  # No bomb found
+        x_bomb, y_bomb = -2, -2  # No bomb found
     else:
         x_bomb = np.sign(xb - xp)
         y_bomb = np.sign(yb - yp)
@@ -209,18 +217,18 @@ def state_to_features(game_state: dict) -> Features:
         x_coin = y_coin = 0
 
     # Nearest crate
-    nearest_crater_pos = nearest_crater(game_state, xp, yp)
-    if nearest_crater_pos is not None:
-        x_crate = np.sign(nearest_crater_pos[0] - xp)
-        y_crate = np.sign(nearest_crater_pos[1] - yp)
+    nearest_crate_pos = nearest_crate(game_state, xp, yp)
+    if nearest_crate_pos is not None:
+        x_crate = np.sign(nearest_crate_pos[0] - xp)
+        y_crate = np.sign(nearest_crate_pos[1] - yp)
     else:
         x_crate = y_crate = 0
 
-    safe_down = is_safe(game_state, bombs, direction="down")
-    safe_up = is_safe(game_state, bombs, direction="up")
-    safe_left = is_safe(game_state, bombs, direction="left")
-    safe_right = is_safe(game_state, bombs, direction="right")
-    safe_stay = is_safe(game_state, bombs, direction="stay")
+    safe_down = is_safe(game_state, bomb_range, direction="down")
+    safe_up = is_safe(game_state, bomb_range, direction="up")
+    safe_left = is_safe(game_state, bomb_range, direction="left")
+    safe_right = is_safe(game_state, bomb_range, direction="right")
+    safe_stay = is_safe(game_state, bomb_range, direction="stay")
 
     # Possible movement directions
     possible_down = is_move_possible(game_state, xp, yp, "down")
@@ -244,11 +252,7 @@ def state_to_features(game_state: dict) -> Features:
         bomb_range=bomb_range  # Tiles affected by the nearest bomb
     )
 
-def is_within_explosion_range(bomb_x, bomb_y, target_x, target_y, bomb_timer):
-    return (target_x == bomb_x and abs(target_y - bomb_y) <= bomb_timer) or \
-            (target_y == bomb_y and abs(target_x - bomb_x) <= bomb_timer)
-
-def is_safe(game_state: dict, bombs: np.ndarray, direction="stay") -> bool:
+def is_safe(game_state: dict, bomb_range: list, direction="stay") -> bool:
     """
     Determine if the player's current position or a specific direction is safe from bomb explosions.
 
@@ -275,19 +279,13 @@ def is_safe(game_state: dict, bombs: np.ndarray, direction="stay") -> bool:
     else:
         raise ValueError("Invalid direction specified.")
 
-    # Check if the new position is within bounds
-    if new_x < 0 or new_x >= field.shape[0] or new_y < 0 or new_y >= field.shape[1]:
-        return False  # Out of bounds
-
     # Check if the player's current position is safe
-    for (xb, yb) in np.argwhere(bombs > 0):  # Get indices of bombs that are active
-        if is_within_explosion_range(xb, yb, xp, yp, bombs[xb, yb]):
-            return False  # Current position is not safe
+    if (xp, yp) in bomb_range:
+        return False
 
     # Check if the new position is safe
-    for (xb, yb) in np.argwhere(bombs > 0):  # Get indices of bombs that are active
-        if is_within_explosion_range(xb, yb, new_x, new_y, bombs[xb, yb]):
-            return False  # New position is not safe
+    if (new_x, new_y) in bomb_range:
+        return False
 
     return True  # Both current and new positions are safe
 
@@ -299,22 +297,20 @@ def act(self, game_state: dict) -> str:
     :param game_state: The current state of the game.
     :return: The chosen action as a string.
     """
-    # Extract features from the current game state
-    features = state_to_features(game_state)
-    
-    # Construct the state for Q-table lookup based on the extracted features
+    features = state_to_features(game_state)  # Extract features
     self.state = (
-        features.x_bomb, features.y_bomb, 
-        features.x_coin, features.y_coin, 
-        features.x_crate, features.y_crate, 
-        features.safe_down, features.safe_up, 
-        features.safe_left, features.safe_right, 
-        features.safe_stay, features.possible_down, 
-        features.possible_up, features.possible_right, 
-        features.possible_left, features.can_place_bomb
+        features.x_bomb, features.y_bomb,
+        features.x_coin, features.y_coin,
+        features.x_crate, features.y_crate,
+        features.safe_down, features.safe_up,
+        features.safe_left, features.safe_right,
+        features.safe_stay,
+        features.possible_down, features.possible_up,
+        features.possible_right, features.possible_left,
+        features.can_place_bomb
     )
 
-    # Convert the state tuple to a hashable form (can also use a simpler way if needed)
+    # Hashable state for Q-table lookup
     hashed_state = tuple(self.state)
 
     # Epsilon-greedy policy for action selection
@@ -322,15 +318,44 @@ def act(self, game_state: dict) -> str:
         if hashed_state in self.q_table:
             action = np.argmax(self.q_table[hashed_state])
         else:
-            # If the state is unseen, return a default action or random action
-            action = np.random.randint(0, len(ACTIONS))
+            action = np.random.randint(0, len(ACTIONS))  # Explore
     else:
-        action = np.random.randint(0, len(ACTIONS))
+        action = np.random.randint(0, len(ACTIONS))  # Explore
+
+    # Define a dictionary to easily check safety and movement
+    action_checks = {
+        0 : (features.safe_up, features.possible_up),
+        1 : (features.safe_down, features.possible_down),
+        2 : (features.safe_left, features.possible_left),
+        3 : (features.safe_right, features.possible_right),
+        4 : (features.safe_stay, True),  # WAIT is always possible
+        5 : (features.can_place_bomb, True)  # Can place bomb if allowed
+    }
+    """
+    print(f"Current position: {game_state['self'][3]}")
+    print(f"There is a bomb at: {features.x_bomb, features.y_bomb}")
+    print(f"Nearest coin in direction: {features.x_coin, features.y_coin}")
+    print(f"Nearest crate in direction: {features.x_crate, features.y_crate}")
+    print(f"possible_up: {features.possible_up}, safe_up: {features.safe_up}")
+    print(f"possible_down: {features.possible_down}, safe_down: {features.safe_down}")
+    print(f"possible_left: {features.possible_left}, safe_left: {features.safe_left}")
+    print(f"possible_right: {features.possible_right}, safe_right: {features.safe_right}")
+    """
+    
+    valid_actions = [action for action, string in enumerate(ACTIONS) if action_checks[action][0] and action_checks[action][1]]
+
+    # If no valid actions are available, fallback to a default action
+    if not valid_actions:
+        action = 4  # WAIT
+    else:
+        # Choose a random action from valid actions
+        action = np.random.choice(valid_actions)
 
     # Set the current action for later use
     self.action = action
-    
-    self.logger.info(f"Choosing action: {ACTIONS[action]} for state: {self.state}")
+
+    # print(f"Choosing action: {ACTIONS[action]}")
+    self.logger.info(f"Choosing action: {ACTIONS[action]}")
 
     # Return the action corresponding to the chosen index
     return ACTIONS[action]
