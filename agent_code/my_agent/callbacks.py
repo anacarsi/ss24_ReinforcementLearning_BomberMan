@@ -14,7 +14,11 @@ def setup(self):
     """
     Setup Q-learning agent. This is called once when loading each agent.
     """
-    self.model = QLearningModel()
+    self.q_table = {}
+    self.epsilon = 0.9
+    self.epsilon_decay = 0.9999
+    self.epsilon_min = 0.1
+    self.discount_factor = 0.8
     self.logger.info("Model initialized")
     load_model(self)
     self.logger.info("Model loaded")
@@ -27,10 +31,10 @@ def load_model(self):
     Load the Q-table from a file if it exists.
     """
     q_table = {}
-    if os.path.isfile(get_dir() + '/q_table.pkl'):
-        with open(get_dir() + '/q_table.pkl', 'rb') as file:
+    if os.path.isfile(get_dir() + '/q_table.pickle'):
+        with open(get_dir() + '/q_table.pickle', 'rb') as file:
             q_table = pickle.load(file)
-            self.model.load_table(q_table)
+            self.q_table = q_table
             self.logger.info("Model loaded")
             print("Model loaded")
     else:
