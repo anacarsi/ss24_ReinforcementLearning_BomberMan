@@ -120,8 +120,9 @@ def nearest_crater(game_state, x: int, y: int) -> tuple:
     :param y: The y-coordinate of the player.
     :return: The coordinates of the nearest crate.
     """
-    crates = game_state["crates"]
-    if not crates:
+    field = game_state["field"]
+    crates = np.argwhere(field == 1)
+    if len(crates) == 0:
         return None
     return min(crates, key=lambda c: abs(c[0] - x) + abs(c[1] - y))   
     
@@ -147,24 +148,38 @@ def bomb_explosion_range(xb: int, yb: int, field: np.array) -> list:
 
     return explosion_range
 
-def nearest_bomb_and_range(bombs: np.ndarray, game_state, xp: int, yp: int) -> tuple:
+def nearest_bomb_and_range(bombs: np.ndarray, game_state: dict, xp: int, yp: int) -> tuple:
     """
     Find the nearest bomb to the player's position and calculate the explosion range of that bomb.
 
-    :param game_state: The current game state.
+    :param bombs: A 17x17 numpy array where each cell contains either 0 (no bomb) or the bomb's timer.
+    :param game_state: The current game state dictionary.
     :param xp: The x-coordinate of the player.
     :param yp: The y-coordinate of the player.
     :return: The coordinates of the nearest bomb and its explosion range.
     """
-    if bombs is None:
+    if bombs is None or not np.any(bombs):
+        return (None, None), []
+    
+    # Find all bomb positions (where the bomb timer is > 0)
+    bomb_positions = np.argwhere(bombs > 0)
+
+    # If there are no bombs, return None
+    if bomb_positions.size == 0:
+        print("No bombs found")
         return None, []
 
-    nearest_bomb = min(bombs, key=lambda b: abs(b[0][0] - xp) + abs(b[0][1] - yp))
-    xb, yb = nearest_bomb[0]  # Coordinates of the nearest bomb
+    # Find the nearest bomb using Manhattan distance
+    nearest_bomb = min(bomb_positions, key=lambda b: abs(b[0] - xp) + abs(b[1] - yp))
+    xb, yb = nearest_bomb  # Coordinates of the nearest bomb
+
+    # Calculate the explosion range of the nearest bomb
     explosion_range = bomb_explosion_range(xb, yb, game_state["field"])
+
     return (xb, yb), explosion_range
 
-def state_to_features(game_state) -> Features:
+
+def state_to_features(game_state: dict) -> Features:
     """
     Define the state of the game as a feature vector.
 
@@ -179,8 +194,11 @@ def state_to_features(game_state) -> Features:
         bombs[xy] = bomb_timer + 1.0 # Agent gets warning about newly placed bombs, avoiding confusion between a bomb about to explode (timer = 0) and an empty space.
 
     (xb, yb), bomb_range = nearest_bomb_and_range(bombs, game_state, xp, yp)
-    x_bomb = np.sign(xb - xp)
-    y_bomb = np.sign(yb - yp)
+    if xb is None or yb is None:
+        x_bomb, y_bomb = -1, -1  # No bomb found
+    else:
+        x_bomb = np.sign(xb - xp)
+        y_bomb = np.sign(yb - yp)
 
     # Nearest coin
     nearest_coin_pos = nearest_coin(game_state, xp, yp)
@@ -192,17 +210,17 @@ def state_to_features(game_state) -> Features:
 
     # Nearest crate
     nearest_crater_pos = nearest_crater(game_state, xp, yp)
-    if nearest_crater_pos:
+    if nearest_crater_pos is not None:
         x_crate = np.sign(nearest_crater_pos[0] - xp)
         y_crate = np.sign(nearest_crater_pos[1] - yp)
     else:
         x_crate = y_crate = 0
 
-    safe_down = is_safe(game_state, direction="down")
-    safe_up = is_safe(game_state, direction="up")
-    safe_left = is_safe(game_state, direction="left")
-    safe_right = is_safe(game_state, direction="right")
-    safe_stay = is_safe(game_state, direction="stay")
+    safe_down = is_safe(game_state, bombs, direction="down")
+    safe_up = is_safe(game_state, bombs, direction="up")
+    safe_left = is_safe(game_state, bombs, direction="left")
+    safe_right = is_safe(game_state, bombs, direction="right")
+    safe_stay = is_safe(game_state, bombs, direction="stay")
 
     # Possible movement directions
     possible_down = is_move_possible(game_state, xp, yp, "down")
@@ -226,34 +244,53 @@ def state_to_features(game_state) -> Features:
         bomb_range=bomb_range  # Tiles affected by the nearest bomb
     )
 
-def is_safe(game_state, bombs: np.nadarray, direction="stay") -> bool:
+def is_within_explosion_range(bomb_x, bomb_y, target_x, target_y, bomb_timer):
+    return (target_x == bomb_x and abs(target_y - bomb_y) <= bomb_timer) or \
+            (target_y == bomb_y and abs(target_x - bomb_x) <= bomb_timer)
+
+def is_safe(game_state: dict, bombs: np.ndarray, direction="stay") -> bool:
     """
     Determine if the player's current position or a specific direction is safe from bomb explosions.
 
     :param game_state: The current game state.
+    :param bombs: A 2D numpy array representing bomb timers.
     :param direction: The direction to check ("stay", "up", "down", "left", "right").
     :return: True if the position is safe, False otherwise.
     """
     player_cords = game_state["self"][3]
-    bombs_ticking = bombs
-    field = game_state["field"]
     xp, yp = player_cords
+    field = game_state["field"]
+    
+    # Define the new position based on the direction
+    if direction == "stay":
+        new_x, new_y = xp, yp
+    elif direction == "up":
+        new_x, new_y = xp, yp - 1
+    elif direction == "down":
+        new_x, new_y = xp, yp + 1
+    elif direction == "left":
+        new_x, new_y = xp - 1, yp
+    elif direction == "right":
+        new_x, new_y = xp + 1, yp
+    else:
+        raise ValueError("Invalid direction specified.")
 
-    for xy in bombs_ticking:
-        xb, yb = xy
-        explosion_range = bomb_explosion_range(xb, yb, field)
-        if direction == "stay" and (xp, yp) in explosion_range:
-            return False
-        if direction == "down" and (xp, yp + 1) in explosion_range:
-            return False
-        if direction == "up" and (xp, yp - 1) in explosion_range:
-            return False
-        if direction == "left" and (xp - 1, yp) in explosion_range:
-            return False
-        if direction == "right" and (xp + 1, yp) in explosion_range:
-            return False
+    # Check if the new position is within bounds
+    if new_x < 0 or new_x >= field.shape[0] or new_y < 0 or new_y >= field.shape[1]:
+        return False  # Out of bounds
 
-    return True
+    # Check if the player's current position is safe
+    for (xb, yb) in np.argwhere(bombs > 0):  # Get indices of bombs that are active
+        if is_within_explosion_range(xb, yb, xp, yp, bombs[xb, yb]):
+            return False  # Current position is not safe
+
+    # Check if the new position is safe
+    for (xb, yb) in np.argwhere(bombs > 0):  # Get indices of bombs that are active
+        if is_within_explosion_range(xb, yb, new_x, new_y, bombs[xb, yb]):
+            return False  # New position is not safe
+
+    return True  # Both current and new positions are safe
+
 
 def act(self, game_state: dict) -> str:
     """
@@ -281,7 +318,7 @@ def act(self, game_state: dict) -> str:
     hashed_state = tuple(self.state)
 
     # Epsilon-greedy policy for action selection
-    if np.random.random() > self.model.epsilon:
+    if np.random.random() > self.epsilon:
         if hashed_state in self.q_table:
             action = np.argmax(self.q_table[hashed_state])
         else:

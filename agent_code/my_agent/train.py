@@ -4,7 +4,7 @@ import json
 import pickle
 from typing import List
 import events as e
-from .callbacks import state_to_features, create_vision
+from .callbacks import state_to_features, Features
 
 # Define a namedtuple for transitions (state, action, next_state, reward)
 Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
@@ -162,7 +162,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     self.state = new_state
 
 
-def potential_function(self, reward_episode, max_reward_eps, min_reward_eps):
+def potential_function(self, reward_episode: int, max_reward_eps: int, min_reward_eps: int):
     """
     Calculate the potential-based reward shaping function psi_s.
     
@@ -242,7 +242,7 @@ def reward_from_events(self, events: List[str]) -> int:
     game_rewards = {
         e.SURVIVED_ROUND: 100,
         e.KILLED_OPPONENT: 10,
-        e.CRATES_DESTROYED: 5,
+        e.CRATE_DESTROYED: 5,
         e.COIN_COLLECTED: 10,
         e.GOT_KILLED: -100,
         e.KILLED_SELF: -100,
