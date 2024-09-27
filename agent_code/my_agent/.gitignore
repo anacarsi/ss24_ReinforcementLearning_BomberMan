@@ -1,2 +1,3 @@
 /my-saved-model.pt
 /q_table.pickle
+*.log
