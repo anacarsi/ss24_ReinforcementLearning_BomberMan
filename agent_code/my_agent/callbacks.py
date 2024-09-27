@@ -3,6 +3,7 @@ import sys
 import pickle
 import numpy as np
 import networkx as nx
+from typing import NamedTuple
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, parent_dir)
@@ -35,161 +36,277 @@ def load_model(self):
     else:
         self.logger.info("Model not found")
 
+class Features(NamedTuple):
+    x_bomb: int
+    y_bomb: int
+    x_coin: int
+    y_coin: int
+    x_crate: int
+    y_crate: int
+    safe_down: bool         # checks if moving down would place the player in a safe position
+    safe_up: bool
+    safe_left: bool
+    safe_right: bool
+    safe_stay: bool
+    possible_up: bool
+    possible_down: bool     # whether the move is mechanically possible
+    possible_right: bool
+    possible_left: bool
+    can_place_bomb: bool
+    bomb_range: list 
+    # danger_bomb = (1 / distance_to_bomb) * (1 / bomb_timer)
+    # value_coin = (1 / distance_to_coin) * (safety_modifier)
+
+
+def is_move_possible(game_state, x: int, y: int, direction: str) -> bool:
+    """
+    Determine if a move is possible in the specified direction.
+
+    :param game_state: The current game state.
+    :param x: The x-coordinate of the player.
+    :param y: The y-coordinate of the player.
+    :param direction: The direction to check.
+    :return: True if the move is possible, False otherwise.
+    """
+    field = game_state["field"]
+    if direction == "down":
+        return field[x, y + 1] == 0
+    elif direction == "up":
+        return field[x, y - 1] == 0
+    elif direction == "left":
+        return field[x - 1, y] == 0
+    elif direction == "right":
+        return field[x + 1, y] == 0
+    return True
+    
+def nearest_coin(game_state, x: int, y: int) -> tuple:
+    """
+    Find the nearest coin to the player's position.
+
+    :param game_state: The current game state.
+    :param x: The x-coordinate of the player.
+    :param y: The y-coordinate of the player.
+    :return: The coordinates of the nearest coin.
+    """
+    coins = game_state["coins"]
+    if not coins:
+        return None
+    return min(coins, key=lambda c: abs(c[0] - x) + abs(c[1] - y))
+
+def nearest_bomb(game_state, x: int, y: int) -> tuple:
+    """
+    Find the nearest bomb to the player's position.
+
+    :param game_state: The current game state.
+    :param x: The x-coordinate of the player.
+    :param y: The y-coordinate of the player.
+    :return: The coordinates of the nearest bomb.
+    """
+    bombs = game_state["bombs"]
+    if not bombs:
+        return None
+    return min(bombs, key=lambda b: abs(b[0][0] - x) + abs(b[0][1] - y))
+
+def nearest_crater(game_state, x: int, y: int) -> tuple:
+    """
+    Find the nearest crate to the player's position.
+
+    :param game_state: The current game state.
+    :param x: The x-coordinate of the player.
+    :param y: The y-coordinate of the player.
+    :return: The coordinates of the nearest crate.
+    """
+    crates = game_state["crates"]
+    if not crates:
+        return None
+    return min(crates, key=lambda c: abs(c[0] - x) + abs(c[1] - y))   
+    
+def bomb_explosion_range(xb: int, yb: int, field: np.array) -> list:
+    """
+    Calculate the tiles affected by the explosion of a bomb at (xb, yb).
+    The explosion extends up to 3 tiles in each direction unless blocked by a stone wall.
+
+    :param xb: x-coordinate of the bomb.
+    :param yb: y-coordinate of the bomb.
+    :param field: The game field, with walls and empty spaces.
+    :return: A list of coordinates affected by the bomb explosion.
+    """
+    explosion_range = [(xb, yb)]  # The bomb's own position
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # Up, down, left, right
+
+    for dx, dy in directions:
+        for step in range(1, 4):  # Bomb affects up to 3 tiles in each direction
+            nx, ny = xb + dx * step, yb + dy * step
+            if field[nx, ny] == -1:  # Stop at stone walls
+                break
+            explosion_range.append((nx, ny))
+
+    return explosion_range
+
+def nearest_bomb_and_range(bombs: np.ndarray, game_state, xp: int, yp: int) -> tuple:
+    """
+    Find the nearest bomb to the player's position and calculate the explosion range of that bomb.
+
+    :param game_state: The current game state.
+    :param xp: The x-coordinate of the player.
+    :param yp: The y-coordinate of the player.
+    :return: The coordinates of the nearest bomb and its explosion range.
+    """
+    if bombs is None:
+        return None, []
+
+    nearest_bomb = min(bombs, key=lambda b: abs(b[0][0] - xp) + abs(b[0][1] - yp))
+    xb, yb = nearest_bomb[0]  # Coordinates of the nearest bomb
+    explosion_range = bomb_explosion_range(xb, yb, game_state["field"])
+    return (xb, yb), explosion_range
+
+def state_to_features(game_state) -> Features:
+    """
+    Define the state of the game as a feature vector.
+
+    :param game_state: The current game state.
+    :return: The feature vector representing the game state.
+    """
+    xp, yp = game_state["self"][3]  # Player's coordinates
+
+    # Nearest bomb and its explosion range
+    bombs = np.zeros((17, 17), dtype=np.float32)
+    for xy, bomb_timer in game_state["bombs"]:
+        bombs[xy] = bomb_timer + 1.0 # Agent gets warning about newly placed bombs, avoiding confusion between a bomb about to explode (timer = 0) and an empty space.
+
+    (xb, yb), bomb_range = nearest_bomb_and_range(bombs, game_state, xp, yp)
+    x_bomb = np.sign(xb - xp)
+    y_bomb = np.sign(yb - yp)
+
+    # Nearest coin
+    nearest_coin_pos = nearest_coin(game_state, xp, yp)
+    if nearest_coin_pos:
+        x_coin = np.sign(nearest_coin_pos[0] - xp)
+        y_coin = np.sign(nearest_coin_pos[1] - yp)
+    else:
+        x_coin = y_coin = 0
+
+    # Nearest crate
+    nearest_crater_pos = nearest_crater(game_state, xp, yp)
+    if nearest_crater_pos:
+        x_crate = np.sign(nearest_crater_pos[0] - xp)
+        y_crate = np.sign(nearest_crater_pos[1] - yp)
+    else:
+        x_crate = y_crate = 0
+
+    safe_down = is_safe(game_state, direction="down")
+    safe_up = is_safe(game_state, direction="up")
+    safe_left = is_safe(game_state, direction="left")
+    safe_right = is_safe(game_state, direction="right")
+    safe_stay = is_safe(game_state, direction="stay")
+
+    # Possible movement directions
+    possible_down = is_move_possible(game_state, xp, yp, "down")
+    possible_up = is_move_possible(game_state, xp, yp, "up")
+    possible_right = is_move_possible(game_state, xp, yp, "right")
+    possible_left = is_move_possible(game_state, xp, yp, "left")
+
+    can_place_bomb = game_state["self"][2]
+
+    # Return the feature vector
+    return Features(
+        x_bomb=x_bomb, y_bomb=y_bomb,
+        x_coin=x_coin, y_coin=y_coin,
+        x_crate=x_crate, y_crate=y_crate,
+        safe_down=safe_down, safe_up=safe_up,
+        safe_left=safe_left, safe_right=safe_right,
+        safe_stay=safe_stay, 
+        possible_up=possible_up, possible_down=possible_down, 
+        possible_right=possible_right, possible_left=possible_left,
+        can_place_bomb=can_place_bomb,
+        bomb_range=bomb_range  # Tiles affected by the nearest bomb
+    )
+
+def is_safe(game_state, bombs: np.nadarray, direction="stay") -> bool:
+    """
+    Determine if the player's current position or a specific direction is safe from bomb explosions.
+
+    :param game_state: The current game state.
+    :param direction: The direction to check ("stay", "up", "down", "left", "right").
+    :return: True if the position is safe, False otherwise.
+    """
+    player_cords = game_state["self"][3]
+    bombs_ticking = bombs
+    field = game_state["field"]
+    xp, yp = player_cords
+
+    for xy in bombs_ticking:
+        xb, yb = xy
+        explosion_range = bomb_explosion_range(xb, yb, field)
+        if direction == "stay" and (xp, yp) in explosion_range:
+            return False
+        if direction == "down" and (xp, yp + 1) in explosion_range:
+            return False
+        if direction == "up" and (xp, yp - 1) in explosion_range:
+            return False
+        if direction == "left" and (xp - 1, yp) in explosion_range:
+            return False
+        if direction == "right" and (xp + 1, yp) in explosion_range:
+            return False
+
+    return True
+
 def act(self, game_state: dict) -> str:
     """
     Choose the next action based on the current state using an epsilon-greedy policy and Q-values.
 
-    :param state: The current state of the game.
+    :param game_state: The current state of the game.
+    :return: The chosen action as a string.
     """
-    field, bombs, vision = state_to_features(self, game_state)
-    can_place_bomb = game_state['self'][2]
-    player_pos = game_state['self'][3]
-    vision_bombs = create_vision(self, bombs, player_pos)
-    self.state = (vision.tobytes(), vision_bombs.tobytes(), can_place_bomb)
+    # Extract features from the current game state
+    features = state_to_features(game_state)
+    
+    # Construct the state for Q-table lookup based on the extracted features
+    self.state = (
+        features.x_bomb, features.y_bomb, 
+        features.x_coin, features.y_coin, 
+        features.x_crate, features.y_crate, 
+        features.safe_down, features.safe_up, 
+        features.safe_left, features.safe_right, 
+        features.safe_stay, features.possible_down, 
+        features.possible_up, features.possible_right, 
+        features.possible_left, features.can_place_bomb
+    )
 
+    # Convert the state tuple to a hashable form (can also use a simpler way if needed)
+    hashed_state = tuple(self.state)
+
+    # Epsilon-greedy policy for action selection
     if np.random.random() > self.model.epsilon:
-        action = np.argmax(self.q_table.get(self.state, [-10] * 6))
+        if hashed_state in self.q_table:
+            action = np.argmax(self.q_table[hashed_state])
+        else:
+            # If the state is unseen, return a default action or random action
+            action = np.random.randint(0, len(ACTIONS))
     else:
-        action = np.random.randint(0, 6)
+        action = np.random.randint(0, len(ACTIONS))
 
-    self.action = action 
-    self.logger.info(f"Choosing action: {action} for state: {game_state}")
+    # Set the current action for later use
+    self.action = action
+    
+    self.logger.info(f"Choosing action: {ACTIONS[action]} for state: {self.state}")
 
+    # Return the action corresponding to the chosen index
     return ACTIONS[action]
 
-
-def state_to_features(self, game_state: dict) -> np.ndarray:
-    """
-    Converts the game state to the input of the Q-learning agent, including field and bomb map calculations.
-
-    :param game_state: Dictionary describing the current game state.
-    :return: Numpy array of features including the field, bomb map, and agent's vision.
-    """
-
-    # Step 1: Build the game field and encode relevant entities
-    field = field_to_features(self, game_state)
+"""
+def apply_mutations_to_action(x_flip, y_flip, transpose, action):
     
-    # Step 2: Generate the bomb map based on bomb timers and positions
-    bomb_map = bombs_to_features(self, game_state, field)
-    
-    # Step 3: Extract the agent's vision with a specific radius
-    player_pos = game_state['self'][3]
-    vision = create_vision(self, field, player_pos)
-    
-    # Step 4: Flatten and concatenate field, bomb map, and vision into a single feature vector
-    return field, bomb_map, vision
+    x_flip_map = {"LEFT": "RIGHT", "RIGHT": "LEFT"}
+    y_flip_map = {"UP": "DOWN", "DOWN": "UP"}
+    transpose_map = {"UP": "LEFT", "LEFT": "UP", "DOWN": "RIGHT", "RIGHT": "DOWN"}
 
-def bombs_to_features(self, game_state: dict, field: np.ndarray) -> np.ndarray:
-    """
-    Generates a bomb map based on the game state, considering bomb timers and walls.
-    
-    :param game_state: The dictionary containing the current game state.
-    :param field: The game field with walls and obstacles.
-    :return: A bomb map as a 2D numpy array, indicating bomb timers.
-    """
-    bomb_map = np.full_like(field, -1)  # Initialize bomb map with -1 (no bomb)
-    
-    for (bomb_pos, bomb_timer) in game_state['bombs']:
-        x, y = bomb_pos
-        timer = bomb_timer + 1  # Timer counts down
+    if transpose and action in transpose_map:
+        action = transpose_map[action]
+    if x_flip and action in x_flip_map:
+        action = x_flip_map[action]
+    if y_flip and action in y_flip_map:
+        action = y_flip_map[action]
 
-        # Define affected tiles (current bomb and its potential explosion range)
-        affected_tiles = [
-            [(x, y), (x, y - 1)],  # Up
-            [(x, y + 1)],          # Down
-            [(x - 1, y)],          # Left
-            [(x + 1, y)]           # Right
-        ]
-
-        # Update bomb map for all affected tiles unless blocked by walls (-1 in field)
-        for direction in affected_tiles:
-            for tile in direction:
-                if not (0 <= tile[0] < field.shape[0] and 0 <= tile[1] < field.shape[1]):
-                    break  # Ensure tile is within bounds
-                if field[tile] == -1:
-                    break  # Wall blocks the bomb's effect
-                bomb_map[tile] = timer
-
-    # Incorporate any active explosions from the game state (explosions set the bomb timer to 1)
-    bomb_map[game_state['explosion_map'] == 1] = 1
-
-    return bomb_map
-
-def field_to_features(self, game_state: dict) -> np.ndarray:
-    """
-    Builds the game field with adjusted values for bombs, coins, and opponents.
-    
-    :param game_state: The dictionary containing the current game state.
-    :return: The game field encoded with relevant entities.
-    """
-    field = game_state['field'].copy()  # Copy the field (walls and empty spaces)
-    
-    # Encode bombs as 2 on the field
-    for bomb_pos, _ in game_state['bombs']:
-        field[bomb_pos] = 2
-
-    # Encode coins as 3 on the field
-    for coin_pos in game_state['coins']:
-        field[coin_pos] = 3
-
-    # Encode opponents as 4 on the field
-    for opponent in game_state['others']:
-        field[opponent[3]] = 4
-    
-    return field
-
-def create_vision(self, field: np.ndarray, player_pos: tuple, radius: int = 8) -> np.ndarray:
-    """
-    Generates the agent's vision grid centered on the player's position.
-    
-    :param field: The game field.
-    :param player_pos: The position of the player.
-    :param radius: The radius of the vision grid around the player.
-    :return: A (2*radius+1)x(2*radius+1) grid representing the agent's vision.
-    """
-    # Create an empty vision array
-    vision = np.zeros((2 * radius + 1, 2 * radius + 1)) 
-    x, y = player_pos
-    # Define the area around the player within the radius
-    left, right = max(0, x - radius), min(field.shape[0], x + radius + 1)
-    up, down = max(0, y - radius), min(field.shape[1], y + radius + 1)
-    
-    # Fill the vision grid with the corresponding tiles from the field
-    vision[(left - (x - radius)):(right - (x - radius)),
-           (up - (y - radius)):(down - (y - radius))] = field[left:right, up:down]
-
-    return vision
-
-
-class QLearningModel():
-    def __init__(self):
-        self.q_table = {}
-        self.epsilon = 0.9
-        self.epsilon_decay = 0.9999
-        self.epsilon_min = 0.1
-        self.discount_factor = 0.8
-
-    def define_task(self, task) -> None:
-        """
-        Define actions depending on the task.
-        Task 1: Collect coins as quickly as possible.
-        Task 2: Collect hidden coins within a step limit.
-        Task 3: Hunt and blow up a predefined peaceful agent.
-            Task 3.2: Hunt and blow up a coin collector agent.
-        Task 4: Survive and collect coins.
-
-        :param task: The task to be performed.
-        """
-        if task == 1:
-            self.actions = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT']
-        elif task > 1:
-            self.actions = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
-    
-    def load_table(self, q_table) -> None:
-        """
-        Load the Q-table from a file if it exists.
-
-        :param q_table: The Q-table to be loaded.
-        """
-        self.q_table = q_table
-    
+    return action
+"""
