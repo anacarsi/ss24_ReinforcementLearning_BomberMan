@@ -59,84 +59,108 @@ def game_events_occurred_old(self, old_game_state: dict, self_action: str, new_g
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     """
-    Step by step reward calculation and Q-table update.
+    Step-by-step reward calculation and Q-table update.
+    
+    This function updates the Q-values based on the events that occurred between the old and new game states, and saves the
+    experience (state-action-reward-new_state) for future replay.
 
-    This function uses the events that occurred between the old and new game state to adjust the agent's 
-    rewards and Q-values. It also saves the experience (state-action-reward) in the replay buffer for future use.
-
-    :param old_game_state: The game state before taking the action.
+    :param old_game_state: The game state before the action was taken.
     :param self_action: The action the agent took.
-    :param new_game_state: The resulting game state after taking the action.
+    :param new_game_state: The game state after the action was taken.
     :param events: The list of events that occurred between the old and new game state.
     """
-
-        # ------------------- NEW STATE CONSTRUCTION -------------------
-    # Extract necessary information to build the new state representation
-    field_representation, bombs, vision_field = state_to_features(self, new_game_state)  # Generate field map with bombs, crates, etc.
-    can_place_bomb = new_game_state['self'][2] 
-    player_x, player_y = new_game_state['self'][3] 
     
-    # Agent's local vision around its position (for field and bomb map)
-    vision_bomb_map = create_vision(self, bombs, (player_x, player_y), radius=4)
+    # ------------------- NEW STATE CONSTRUCTION -------------------
+    # Extract features from the new game state
+    if new_game_state is not None:
+        new_features = state_to_features(new_game_state)
+        # Use the relevant features as the new state representation
+        new_state = (
+            new_features.x_bomb, new_features.y_bomb, 
+            new_features.x_coin, new_features.y_coin, 
+            new_features.x_crate, new_features.y_crate, 
+            new_features.safe_down, new_features.safe_up, 
+            new_features.safe_left, new_features.safe_right, 
+            new_features.safe_stay, new_features.possible_down, 
+            new_features.possible_up, new_features.possible_right, 
+            new_features.possible_left, new_features.can_place_bomb
+        )
+    else:
+        new_state = None  # If the game ends, there may not be a new state
 
-    # Create the new state representation (using bytes for efficient hashing)
-    new_state = (vision_field.tobytes(), vision_bomb_map.tobytes(), can_place_bomb)
+    # ------------------- OLD STATE CONSTRUCTION -------------------
+    # Extract features from the old game state
+    if old_game_state is not None:
+        old_features = state_to_features(old_game_state)
+        old_state = (
+            old_features.x_bomb, old_features.y_bomb, 
+            old_features.x_coin, old_features.y_coin, 
+            old_features.x_crate, old_features.y_crate, 
+            old_features.safe_down, old_features.safe_up, 
+            old_features.safe_left, old_features.safe_right, 
+            old_features.safe_stay, old_features.possible_down, 
+            old_features.possible_up, old_features.possible_right, 
+            old_features.possible_left, old_features.can_place_bomb
+        )
+    else:
+        return  # If there is no old state (like at the start of the game), there's nothing to do
 
     # ------------------- REWARD CALCULATION -------------------
-    # Every step has a small penalty to encourage efficient movement
+    # Default step reward (negative to encourage quicker decision-making)
     step_reward = -1
-    
-    # Reward adjustments based on game events
+
+    # Event-based reward adjustments
     if "CRATE_DESTROYED" in events:
-        step_reward += 5  # Reward for destroying crates
+        step_reward += 5  # Destroying crates gives a reward
     if "COIN_FOUND" in events:
-        step_reward += 1  # Reward for discovering coins
+        step_reward += 1  # Finding coins is rewarded
     if "COIN_COLLECTED" in events:
-        step_reward += 10  # Reward for collecting coins
+        step_reward += 10  # Collecting coins gives a large reward
     if "KILLED_OPPONENT" in events:
-        step_reward += 10  # Reward for killing an opponent
+        step_reward += 10  # Killing an opponent gives a large reward
 
-    self.reward_episode += step_reward  # Update the total reward for the episode
+    # Penalizing getting caught in explosions or dying
+    if "GOT_KILLED" in events or "KILLED_SELF" in events:
+        step_reward -= 50  # Severe penalty for dying
 
-    # ------------------- POTENTIAL-BASED REWARD SHAPING (PBRS) -------------------
-    potential_psi = potential_function(self, self.reward_episode, self.max_reward_eps, self.min_reward_eps)
-
-    # Save the current experience to the replay buffer
-    self.replay_buffer.append((self.state, self.action, step_reward, potential_psi, new_state))
+    # Update the episode's total reward
+    self.reward_episode += step_reward
 
     # ------------------- Q-LEARNING UPDATE -------------------
-    # Calculate the maximum future Q-value for the new state
-    future_q_values = self.q_table.get(new_state, [-10] * 6)  # Get future state Q-values (initialize with -10 if state not seen)
-    max_future_q = np.max(future_q_values)
-
-    # Get the current Q-value for the state-action pair
-    current_q_values = self.q_table.get(self.state, [-10] * 6)  # Get current state Q-values (initialize with -10 if state not seen)
+    # Get the current Q-value for the old state-action pair
+    if old_state in self.q_table:
+        current_q_values = self.q_table[old_state]
+    else:
+        # Initialize Q-values for unseen states
+        current_q_values = [-10] * len(ACTIONS)
+    
     old_q_value = current_q_values[self.action]
 
-    # Update the Q-value using the Q-learning formula: Q(s, a) ← (1 - α) * Q(s, a) + α * (r + γ * max_a' Q(s', a'))
+    # Calculate the maximum future Q-value for the new state
+    if new_state is not None:
+        if new_state in self.q_table:
+            future_q_values = self.q_table[new_state]
+        else:
+            # If the new state hasn't been encountered, initialize Q-values
+            future_q_values = [-10] * len(ACTIONS)
+        max_future_q = np.max(future_q_values)
+    else:
+        max_future_q = 0  # No future Q-value if the game ended (e.g., agent died or game finished)
+
+    # Update the Q-value using the Q-learning formula
     new_q_value = (1 - LEARNING_RATE) * old_q_value + LEARNING_RATE * (step_reward + DISCOUNT_FACTOR * max_future_q)
 
-    # If the state is not yet in the Q-table, initialize it with default Q-values
-    if self.state not in self.q_table:
-        self.q_table[self.state] = [-10] * 6
+    # Update the Q-table with the new Q-value for the state-action pair
+    current_q_values[self.action] = new_q_value
+    self.q_table[old_state] = current_q_values
 
-    # Update the Q-value in the Q-table
-    self.q_table[self.state][self.action] = new_q_value
+    # ------------------- SAVE EXPERIENCE FOR REPLAY -------------------
+    # Append the experience to the replay buffer
+    self.replay_buffer.append((old_state, self.action, step_reward, new_state))
 
-    # ------------------- RESET FOR NEXT STEP -------------------
-    # Update state and action for the next step in the next iteration
+    # Update the current state for the next iteration
     self.state = new_state
-    # self.action = self_action
 
-    # ------------------- REPLAY -------------------
-    # Store the transition in replay data
-    transition_data = {
-        'old_state': old_game_state,
-        'action': self_action,
-        'reward': step_reward,
-        'new_state': new_game_state
-    }
-    self.replay_data.append(transition_data)
 
 def potential_function(self, reward_episode, max_reward_eps, min_reward_eps):
     """
@@ -157,80 +181,48 @@ def potential_function(self, reward_episode, max_reward_eps, min_reward_eps):
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     """
     Called at the end of each game or when the agent dies to calculate rewards, update the Q-table, and manage exploration.
-    
-    Parameters:
-    - last_game_state (dict): The final game state of the episode.
-    - last_action (str): The last action taken by the agent.
-    - events (List[str]): The list of events that occurred during the last game state.
     """
 
     # ------------------- REWARD CALCULATION -------------------
-    reward = 0
-    if e.SURVIVED_ROUND in events:
-        reward += 100
-    # if e.COLLECTED_EVERYTHING in events and e.SURVIVED_ROUND in events:
-        # reward += 100
-    if e.SURVIVED_ROUND in events:
-        reward += 100
-    if e.COIN_COLLECTED in events:
-        reward += 10
-    if e.KILLED_SELF in events:
-        reward -= 100
-    if e.GOT_KILLED in events:
-        reward -= 100
+    reward = reward_from_events(self, events)
 
-    self.reward_episode += reward  # Accumulate the total reward for this episode
+    # Final state representation from features
+    if last_game_state is not None:
+        last_features = state_to_features(last_game_state)
+        last_state = (
+            last_features.x_bomb, last_features.y_bomb, 
+            last_features.x_coin, last_features.y_coin, 
+            last_features.x_crate, last_features.y_crate, 
+            last_features.safe_down, last_features.safe_up, 
+            last_features.safe_left, last_features.safe_right, 
+            last_features.safe_stay, last_features.possible_down, 
+            last_features.possible_up, last_features.possible_right, 
+            last_features.possible_left, last_features.can_place_bomb
+        )
+    else:
+        last_state = None  # No state if game ends abruptly
 
-    # ------------------- Q-LEARNING WITH PBRS -------------------
-    # Iterate backward through the replay buffer to apply potential-based reward shaping
-    for i in range(len(self.replay_buffer) - 2, -1, -1):
-        (state, action, _, psi_s, next_state) = self.replay_buffer[i]
-        (_, _, _, next_psi_s, _) = self.replay_buffer[i + 1]
-        
-        # Update the Q-values in the replay buffer using a potential difference (new_psi_s - psi_s) to shape rewards:
-        potential_difference = DISCOUNT_FACTOR * next_psi_s - psi_s
-        self.q_table[state][action] += LEARNING_RATE * potential_difference
+    # Update the Q-value for the last state and action
+    update_q_table(self, last_state, last_action, reward, None)  # Next state is None (game over)
 
-    # ------------------- TRACK MAXIMUM/MINIMUM REWARD -------------------
-    # Update the max/min reward for the episode, only if reward_episode is non-zero
-    if self.reward_episode > self.max_reward_eps and self.reward_episode > 0:
-        self.max_reward_eps = self.reward_episode
-    elif self.reward_episode < self.min_reward_eps and self.reward_episode < 0:
-        self.min_reward_eps = self.reward_episode
+    # ------------------- RESET EPISODE VARIABLES -------------------
+    self.eps += 1  # Increment the episode counter
+    self.reward_episode = 0  # Reset the total reward for the episode
+    self.replay_buffer.clear()  # Clear the replay buffer for the next round
 
-    # ------------------- UPDATE Q-TABLE FOR FINAL STATE -------------------
-    # Initialize state-action values in Q-table if the state is unseen
-    if self.state not in self.q_table:
-        self.q_table[self.state] = [-10] * 6  # Initialize Q-values to -10 for each action
-    
-    # Update Q-value of the final action using reward
-    self.q_table[self.state][self.action] += LEARNING_RATE * reward
-
-    # ------------------- SAVE Q-TABLE PERIODICALLY -------------------
-    # Every 1000 episodes, save the Q-table to a file
     if self.eps % 1000 == 0:
         with open("q_table.pickle", "wb") as file:
             pickle.dump(self.q_table, file)
 
-    # ------------------- EPSILON (EXPLORATION RATE) MANAGEMENT -------------------
-    # Reduce epsilon (exploration rate) every 100 episodes
+    # Decrease exploration rate every 100 episodes
     if self.eps % 100 == 0:
         self.epsilon = max(EPSILON_MIN, self.epsilon * EPSILON_DECAY)
 
-    # Every 10,000 episodes, reset epsilon to 0.3 for more exploration
     if self.eps % 10000 == 0:
         self.epsilon = 0.3
 
-    # ------------------- RESET EPISODE VARIABLES -------------------
-    self.eps += 1  # Increment the episode counter
-    self.reward_episode = 0  # Reset the episode reward
-    self.replay_buffer.clear()  # Clear the replay buffer for the next episode
-
-    # Save the replay data at the end of the episode
     save_replay(self.replay_data)
-    # Reset the replay data for the next episode
-    self.replay_data.clear()
-
+    self.replay_data.clear()  # Clear for next episode
 
 def save_replay(replay_data, filename="replay.json"):
     """
@@ -246,48 +238,51 @@ def save_replay(replay_data, filename="replay.json"):
 def reward_from_events(self, events: List[str]) -> int:
     """
     Calculate reward from the game events that occurred during a step.
-    
-    Customize rewards to encourage or discourage specific agent behaviors.
     """
     game_rewards = {
-        e.SURVIVED_ROUND: 1,
-        e.KILLED_OPPONENT: 5,
-        e.CRATES_DESTROYED: 3,
-        e.BOMB_DROPPED: -1,
-        e.INVALID_ACTION: -1,
+        e.SURVIVED_ROUND: 100,
+        e.KILLED_OPPONENT: 10,
+        e.CRATES_DESTROYED: 5,
+        e.COIN_COLLECTED: 10,
+        e.GOT_KILLED: -100,
         e.KILLED_SELF: -100,
+        e.INVALID_ACTION: -1,
     }
-    
-    # Sum up the rewards from the events
+
     reward_sum = sum(game_rewards.get(event, 0) for event in events)
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
+
 
 def update_q_table(self, state, action, reward, next_state):
     """
     Update the Q-table using the Q-learning update rule.
     
-    :param state: The current state in features.
+    :param state: The current state represented by extracted features.
     :param action: The action taken.
     :param reward: The reward received from the action.
     :param next_state: The next state after the action.
     """
-    # Initialize Q-values for unseen states and actions
+    # Initialize Q-values for unseen states
     if state not in self.q_table:
         self.q_table[state] = np.zeros(len(ACTIONS))
-    if next_state not in self.q_table:
+    if next_state is not None and next_state not in self.q_table:
         self.q_table[next_state] = np.zeros(len(ACTIONS))
-    
-    # Get the current Q-value for the (state, action) pair
+
+    # Current Q-value for (state, action)
     current_q_value = self.q_table[state][ACTIONS.index(action)]
     
-    # Find the max Q-value for the next state (future reward estimation)
-    max_next_q_value = np.max(self.q_table[next_state])
+    # Find the max Q-value for the next state
+    if next_state is not None:
+        max_next_q_value = np.max(self.q_table[next_state])
+    else:
+        max_next_q_value = 0  # No future if the game ended
     
     # Q-learning update rule
     self.q_table[state][ACTIONS.index(action)] = current_q_value + LEARNING_RATE * (
         reward + DISCOUNT_FACTOR * max_next_q_value - current_q_value
     )
+
 
 def log_training_progress(self, episode):
     """
