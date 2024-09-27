@@ -297,6 +297,8 @@ def act(self, game_state: dict) -> str:
     :param game_state: The current state of the game.
     :return: The chosen action as a string.
     """
+    # print(f"elements of q table: {len(self.q_table)}") 
+
     features = state_to_features(game_state)  # Extract features
     self.state = (
         features.x_bomb, features.y_bomb,

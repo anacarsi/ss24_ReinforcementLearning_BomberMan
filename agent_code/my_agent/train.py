@@ -110,14 +110,12 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     step_reward = -1
 
     # Event-based reward adjustments
-    if "CRATE_DESTROYED" in events:
-        step_reward += 5  # Destroying crates gives a reward
-    if "COIN_FOUND" in events:
-        step_reward += 1  # Finding coins is rewarded
     if "COIN_COLLECTED" in events:
         step_reward += 10  # Collecting coins gives a large reward
     if "KILLED_OPPONENT" in events:
-        step_reward += 10  # Killing an opponent gives a large reward
+        step_reward += 50  # Killing an opponent gives a large reward
+    if "SURVIVED_ROUND" in events:
+        step_reward += 100  # Surviving a round gives a good reward
 
     # Penalizing getting caught in explosions or dying
     if "GOT_KILLED" in events or "KILLED_SELF" in events:
@@ -132,7 +130,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
         current_q_values = self.q_table[old_state]
     else:
         # Initialize Q-values for unseen states
-        current_q_values = [-10] * len(ACTIONS)
+        current_q_values = [0] * len(ACTIONS)
     
     old_q_value = current_q_values[self.action]
 
@@ -142,7 +140,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
             future_q_values = self.q_table[new_state]
         else:
             # If the new state hasn't been encountered, initialize Q-values
-            future_q_values = [-10] * len(ACTIONS)
+            future_q_values = [0] * len(ACTIONS)
         max_future_q = np.max(future_q_values)
     else:
         max_future_q = 0  # No future Q-value if the game ended (e.g., agent died or game finished)
