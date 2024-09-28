@@ -4,7 +4,7 @@ import json
 import pickle
 from typing import List
 import events as e
-from .callbacks import state_to_features, Features
+from .callbacks import state_to_features, Features, is_move_safe, convert_to_hashable
 
 # Define a namedtuple for transitions (state, action, next_state, reward)
 Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
@@ -35,28 +35,6 @@ def setup_training(self):
     self.max_reward_eps = -100000           # Maximum value of episode until now
     self.replay_data = []                   # Store the replay data for training
 
- 
-def game_events_occurred_old(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
-    """
-    Called once per step to allow intermediate rewards based on game events.
-    
-    Update the agent's Q-table or policy based on game events that occurred during the step.
-    """
-    self.logger.debug(f'Encountered game event(s): {", ".join(map(repr, events))} in step {new_game_state["step"]}')
-    
-    # Convert states to features using the provided helper function
-    old_state = state_to_features(self, old_game_state)
-    new_state = state_to_features(self, new_game_state)
-    
-    # Calculate reward from events
-    reward = reward_from_events(self, events)
-    
-    # Append the transition (state, action, reward, next_state) to the deque
-    self.transitions.append(Transition(old_state, self_action, new_state, reward))
-    
-    # Update Q-table with the new transition
-    update_q_table(self, old_state, self_action, reward, new_state)
-
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     """
     Step-by-step reward calculation and Q-table update.
@@ -74,36 +52,36 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # Extract features from the new game state
     if new_game_state is not None:
         new_features = state_to_features(new_game_state)
-        # Use the relevant features as the new state representation
         new_state = (
-            new_features.x_bomb, new_features.y_bomb, 
-            new_features.x_coin, new_features.y_coin, 
-            new_features.x_crate, new_features.y_crate, 
-            new_features.safe_down, new_features.safe_up, 
-            new_features.safe_left, new_features.safe_right, 
-            new_features.safe_stay, new_features.possible_down, 
-            new_features.possible_up, new_features.possible_right, 
-            new_features.possible_left, new_features.can_place_bomb
+            convert_to_hashable(new_features.xdirection_nearest_bomb),  # Convert individual features to hashable
+            convert_to_hashable(new_features.ydirection_nearest_bomb),
+            convert_to_hashable(new_features.xdirection_nearest_coin),
+            convert_to_hashable(new_features.ydirection_nearest_coin),
+            convert_to_hashable(new_features.bomb_map),  # Convert bomb_map to hashable type
+            convert_to_hashable(new_features.bomb_range),
+            convert_to_hashable(new_features.reduced_field),  # Convert reduced_field to hashable type
+            convert_to_hashable(new_features.can_place_bomb)
         )
+        new_state = tuple(new_state)  # Ensure the new_state is hashable
     else:
         new_state = None  # If the game ends, there may not be a new state
 
     # ------------------- OLD STATE CONSTRUCTION -------------------
-    # Extract features from the old game state
     if old_game_state is not None:
         old_features = state_to_features(old_game_state)
         old_state = (
-            old_features.x_bomb, old_features.y_bomb, 
-            old_features.x_coin, old_features.y_coin, 
-            old_features.x_crate, old_features.y_crate, 
-            old_features.safe_down, old_features.safe_up, 
-            old_features.safe_left, old_features.safe_right, 
-            old_features.safe_stay, old_features.possible_down, 
-            old_features.possible_up, old_features.possible_right, 
-            old_features.possible_left, old_features.can_place_bomb
+            convert_to_hashable(old_features.xdirection_nearest_bomb),  # Convert individual features to hashable
+            convert_to_hashable(old_features.ydirection_nearest_bomb),
+            convert_to_hashable(old_features.xdirection_nearest_coin),
+            convert_to_hashable(old_features.ydirection_nearest_coin),
+            convert_to_hashable(old_features.bomb_map),  # Convert bomb_map to hashable type
+            convert_to_hashable(old_features.bomb_range),
+            convert_to_hashable(old_features.reduced_field),  # Convert reduced_field to hashable type
+            convert_to_hashable(old_features.can_place_bomb)
         )
+        old_state = tuple(old_state)  # Ensure the old_state is hashable
     else:
-        return  # If there is no old state (like at the start of the game), there's nothing to do
+        return  # If there is no old state, exit early
 
     # ------------------- REWARD CALCULATION -------------------
     # Default step reward (negative to encourage quicker decision-making)
@@ -121,6 +99,28 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     if "GOT_KILLED" in events or "KILLED_SELF" in events:
         step_reward -= 50  # Severe penalty for dying
 
+    
+    #------ Additional negative rewards for putting oneself in danger ------
+    # Agent moving into danger zone without need
+    if is_move_safe(old_game_state, old_features.bomb_range, ACTIONS[4]) and not is_move_safe(old_game_state, old_features.bomb_range, ACTIONS[self.action]):
+        # print("I am safe now but the move I chose is not safe")
+        step_reward -= 50  # Agent moving into danger zone
+
+    """if self.action == 5:
+        print(f"I put a bomb in position:{old_game_state['self'][3]}")
+        print(f"Nearest bomb is in position:{old_features.xdirection_nearest_bomb},{old_features.ydirection_nearest_bomb}")
+        print(f"I am in position:{old_game_state['self'][3]} and would be in {new_game_state['self'][3]}")"""
+
+    xmoving_direction = -1 if self.action == 2 else 1 if self.action == 3 else 0
+    ymoving_direction = -1 if self.action == 0 else 1 if self.action == 1 else 0
+    # Agent getting closer to the bomb and still in explosion range
+    if not is_move_safe(old_game_state, old_features.bomb_range, ACTIONS[4]) and (old_features.xdirection_nearest_bomb == xmoving_direction and old_features.ydirection_nearest_bomb == ymoving_direction and not is_move_safe(old_game_state, old_features.bomb_range, ACTIONS[action])):
+        step_reward -= 50
+
+    # Agent waiting after putting himself the bomb
+    if ACTIONS[self.action] == ACTIONS[4] and old_features.xdirection_nearest_bomb == 0 and old_features.ydirection_nearest_bomb == 0:
+        step_reward -= 50
+    
     # Update the episode's total reward
     self.reward_episode += step_reward
 
@@ -188,15 +188,16 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     if last_game_state is not None:
         last_features = state_to_features(last_game_state)
         last_state = (
-            last_features.x_bomb, last_features.y_bomb, 
-            last_features.x_coin, last_features.y_coin, 
-            last_features.x_crate, last_features.y_crate, 
-            last_features.safe_down, last_features.safe_up, 
-            last_features.safe_left, last_features.safe_right, 
-            last_features.safe_stay, last_features.possible_down, 
-            last_features.possible_up, last_features.possible_right, 
-            last_features.possible_left, last_features.can_place_bomb
+            convert_to_hashable(last_features.xdirection_nearest_bomb),  # Convert individual features to hashable
+            convert_to_hashable(last_features.ydirection_nearest_bomb),
+            convert_to_hashable(last_features.xdirection_nearest_coin),
+            convert_to_hashable(last_features.ydirection_nearest_coin),
+            convert_to_hashable(last_features.bomb_map),  # Convert bomb_map to hashable type
+            convert_to_hashable(last_features.bomb_range),
+            convert_to_hashable(last_features.reduced_field),  # Convert reduced_field to hashable type
+            convert_to_hashable(last_features.can_place_bomb)
         )
+        last_state = tuple(last_state)  # Ensure the last_state is hashable
     else:
         last_state = None  # No state if game ends abruptly
 
