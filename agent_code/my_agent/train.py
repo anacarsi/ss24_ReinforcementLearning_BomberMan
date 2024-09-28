@@ -53,10 +53,10 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     if new_game_state is not None:
         new_features = state_to_features(new_game_state)
         new_state = (
-            convert_to_hashable(new_features.xdirection_nearest_bomb),  # Convert individual features to hashable
-            convert_to_hashable(new_features.ydirection_nearest_bomb),
-            convert_to_hashable(new_features.xdirection_nearest_coin),
-            convert_to_hashable(new_features.ydirection_nearest_coin),
+            # convert_to_hashable(new_features.xdirection_nearest_bomb),  # Convert individual features to hashable
+            # convert_to_hashable(new_features.ydirection_nearest_bomb),
+            # convert_to_hashable(new_features.xdirection_nearest_coin),
+            # convert_to_hashable(new_features.ydirection_nearest_coin),
             convert_to_hashable(new_features.bomb_map),  # Convert bomb_map to hashable type
             convert_to_hashable(new_features.bomb_range),
             convert_to_hashable(new_features.reduced_field),  # Convert reduced_field to hashable type
@@ -70,10 +70,10 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     if old_game_state is not None:
         old_features = state_to_features(old_game_state)
         old_state = (
-            convert_to_hashable(old_features.xdirection_nearest_bomb),  # Convert individual features to hashable
-            convert_to_hashable(old_features.ydirection_nearest_bomb),
-            convert_to_hashable(old_features.xdirection_nearest_coin),
-            convert_to_hashable(old_features.ydirection_nearest_coin),
+            # convert_to_hashable(old_features.xdirection_nearest_bomb),  # Convert individual features to hashable
+            # convert_to_hashable(old_features.ydirection_nearest_bomb),
+            # convert_to_hashable(old_features.xdirection_nearest_coin),
+            # convert_to_hashable(old_features.ydirection_nearest_coin),
             convert_to_hashable(old_features.bomb_map),  # Convert bomb_map to hashable type
             convert_to_hashable(old_features.bomb_range),
             convert_to_hashable(old_features.reduced_field),  # Convert reduced_field to hashable type
@@ -105,8 +105,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     if is_move_safe(old_game_state, old_features.bomb_range, ACTIONS[4]) and not is_move_safe(old_game_state, old_features.bomb_range, ACTIONS[self.action]):
         # print("I am safe now but the move I chose is not safe")
         step_reward -= 50  # Agent moving into danger zone
-
-    """if self.action == 5:
+    """
+    if self.action == 5:
         print(f"I put a bomb in position:{old_game_state['self'][3]}")
         print(f"Nearest bomb is in position:{old_features.xdirection_nearest_bomb},{old_features.ydirection_nearest_bomb}")
         print(f"I am in position:{old_game_state['self'][3]} and would be in {new_game_state['self'][3]}")"""
@@ -114,11 +114,11 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     xmoving_direction = -1 if self.action == 2 else 1 if self.action == 3 else 0
     ymoving_direction = -1 if self.action == 0 else 1 if self.action == 1 else 0
     # Agent getting closer to the bomb and still in explosion range
-    if not is_move_safe(old_game_state, old_features.bomb_range, ACTIONS[4]) and (old_features.xdirection_nearest_bomb == xmoving_direction and old_features.ydirection_nearest_bomb == ymoving_direction and not is_move_safe(old_game_state, old_features.bomb_range, ACTIONS[action])):
-        step_reward -= 50
+    # if not is_move_safe(old_game_state, old_features.bomb_range, ACTIONS[4]) and (old_features.xdirection_nearest_bomb == xmoving_direction and old_features.ydirection_nearest_bomb == ymoving_direction and not is_move_safe(old_game_state, old_features.bomb_range, ACTIONS[action])):
+        # step_reward -= 50
 
-    # Agent waiting after putting himself the bomb
-    if ACTIONS[self.action] == ACTIONS[4] and old_features.xdirection_nearest_bomb == 0 and old_features.ydirection_nearest_bomb == 0:
+    # Agent waiting after putting himself in danger
+    if ACTIONS[self.action] == ACTIONS[4] and old_game_state['self'][3] in old_features.bomb_map:
         step_reward -= 50
     
     # Update the episode's total reward
@@ -188,10 +188,10 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     if last_game_state is not None:
         last_features = state_to_features(last_game_state)
         last_state = (
-            convert_to_hashable(last_features.xdirection_nearest_bomb),  # Convert individual features to hashable
-            convert_to_hashable(last_features.ydirection_nearest_bomb),
-            convert_to_hashable(last_features.xdirection_nearest_coin),
-            convert_to_hashable(last_features.ydirection_nearest_coin),
+            # convert_to_hashable(last_features.xdirection_nearest_bomb),  # Convert individual features to hashable
+            # convert_to_hashable(last_features.ydirection_nearest_bomb),
+            # convert_to_hashable(last_features.xdirection_nearest_coin),
+            # convert_to_hashable(last_features.ydirection_nearest_coin),
             convert_to_hashable(last_features.bomb_map),  # Convert bomb_map to hashable type
             convert_to_hashable(last_features.bomb_range),
             convert_to_hashable(last_features.reduced_field),  # Convert reduced_field to hashable type

@@ -41,10 +41,10 @@ def load_model(self):
         self.logger.info("Model not found")
 
 class Features(NamedTuple):
-    xdirection_nearest_bomb: int    # Actual coordinates of the nearest bomb
-    ydirection_nearest_bomb: int
-    xdirection_nearest_coin: int
-    ydirection_nearest_coin: int
+    # xdirection_nearest_bomb: int    # Actual coordinates of the nearest bomb
+    # ydirection_nearest_bomb: int
+    # xdirection_nearest_coin: int
+    # ydirection_nearest_coin: int
     bomb_map: np.ndarray
     bomb_range: np.ndarray
     reduced_field: np.ndarray
@@ -90,7 +90,7 @@ def construct_map(game_state: dict, type: str, size=7) -> np.ndarray:
     :param size: The size of the cropped map.
     :return: A 7x7 numpy array representing the cropped game field.
     """
-    half_size = size // 2 - 1
+    half_size = size // 2
     map_data = None
     
     # Handling different map types
@@ -209,16 +209,16 @@ def state_to_features(game_state: dict) -> Features:
     bomb_map = construct_map(game_state, "bomb_map")
     (xb, yb) = nearest_bomb(bomb_map, xp, yp)
     # In which direction the nearest bomb is
-    xdirection_nearest_bomb = xb
-    ydirection_nearest_bomb = yb
-    print(f"The bomb map is: {bomb_map}")
+    # xdirection_nearest_bomb = xb
+    # ydirection_nearest_bomb = yb
+    # print(f"The bomb map is: {bomb_map}")
 
     # Nearest coin
     field_cropped = construct_map(game_state, "field")
     (xc, yc) = nearest_coin(field_cropped, xp, yp)
-    xdirection_nearest_coin = xc
-    ydirection_nearest_coin = yc
-    print(f"The field is: {field_cropped}")
+    # xdirection_nearest_coin = xc
+    # ydirection_nearest_coin = yc
+    # print(f"The field is: {field_cropped}")
 
     """
     print("My nearest bomb is at: ", xb, yb)
@@ -230,13 +230,13 @@ def state_to_features(game_state: dict) -> Features:
 
     # Extracting the explosion map and cropping to 7x7
     explosion_map = construct_map(game_state, "explosion_map")
-    print(f"The explosion map is: {explosion_map}")
+    # print(f"The explosion map is: {explosion_map}")
     can_place_bomb = game_state["self"][2]
 
     # Return the feature vector
     return Features(
-        xdirection_nearest_bomb=xdirection_nearest_bomb, ydirection_nearest_bomb=ydirection_nearest_bomb,
-        xdirection_nearest_coin=xdirection_nearest_coin, ydirection_nearest_coin=ydirection_nearest_coin,
+        #xdirection_nearest_bomb=xdirection_nearest_bomb, ydirection_nearest_bomb=ydirection_nearest_bomb,
+        #xdirection_nearest_coin=xdirection_nearest_coin, ydirection_nearest_coin=ydirection_nearest_coin,
         bomb_map=bomb_map, reduced_field=construct_map(game_state, "field"),
         bomb_range=explosion_map,
         can_place_bomb=can_place_bomb
@@ -297,6 +297,32 @@ def convert_to_hashable(item):
     else:
         return item  # If the item is already hashable, return as-is
 
+def is_in_dead_end(game_state, x, y):
+    free_spaces_around = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+    count_free = sum([1 for (xi, yi) in free_spaces_around if game_state['field'][xi, yi] == 0])
+
+    return count_free <= 1 
+
+def can_escape_after_bomb(bomb_map: np.ndarray, agent_pos: tuple) -> bool:
+    """
+    Determine if the agent can escape after dropping a bomb.
+    
+    """
+    x, y = agent_pos
+    # Predict explosion map
+    predicted_bomb_map = bomb_map.copy()
+    for i in range(-3, 4):
+        if 0 <= x + i < bomb_map.shape[0]:
+            predicted_bomb_map[x + i, y] = 1  # Mark explosion in bomb radius
+        if 0 <= y + i < bomb_map.shape[1]:
+            predicted_bomb_map[x, y + i] = 1  # Mark explosion in bomb radius
+    # Check if there are valid escape tiles after bomb drop
+    escape_paths = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+    for ex, ey in escape_paths:
+        if (0 <= ex < bomb_map.shape[0]) and (0 <= ey < bomb_map.shape[1]) and predicted_bomb_map[ex, ey] > 1:
+            return True  # There is a valid escape route
+    return False  # No valid escape route
+
 def act(self, game_state: dict) -> str:
     """
     Choose the next action based on the current state using an epsilon-greedy policy and Q-values.
@@ -306,10 +332,10 @@ def act(self, game_state: dict) -> str:
     """
     features = state_to_features(game_state)  # Extract features
     self.state = (
-        convert_to_hashable(features.xdirection_nearest_bomb),  # Convert individual features to hashable
-        convert_to_hashable(features.ydirection_nearest_bomb),
-        convert_to_hashable(features.xdirection_nearest_coin),
-        convert_to_hashable(features.ydirection_nearest_coin),
+        #convert_to_hashable(features.xdirection_nearest_bomb),  # Convert individual features to hashable
+        #convert_to_hashable(features.ydirection_nearest_bomb),
+        #convert_to_hashable(features.xdirection_nearest_coin),
+        #convert_to_hashable(features.ydirection_nearest_coin),
         convert_to_hashable(features.bomb_map),  # Convert bomb_map to hashable type
         convert_to_hashable(features.bomb_range),
         convert_to_hashable(features.reduced_field),  # Convert reduced_field to hashable type
@@ -327,6 +353,9 @@ def act(self, game_state: dict) -> str:
     else:
         action = np.random.randint(0, len(ACTIONS))  # Explore
 
+    if action == 5 and not features.can_place_bomb or is_in_dead_end(game_state, game_state['self'][3][0], game_state['self'][3][1]):
+        action = np.random.randint(0, 3)
+
     # Set the current action for later use
     # print(f"Choosing action: {ACTIONS[action]}")
     self.action = action
@@ -334,6 +363,8 @@ def act(self, game_state: dict) -> str:
 
     # Return the action corresponding to the chosen index
     return ACTIONS[action]
+
+
 
 """
 def apply_mutations_to_action(x_flip, y_flip, transpose, action):
