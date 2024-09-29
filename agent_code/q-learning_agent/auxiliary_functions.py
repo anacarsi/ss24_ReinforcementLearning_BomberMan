@@ -1,4 +1,42 @@
 import numpy as np
+import networkx as nx
+
+def set_objetive(self, game_state: dict):
+    """
+    TO BE MADE BETTER SO THAT IT CHOOSES THE NEAREST OBJECTIVE.
+    Sets the objective for the agent based on the game state.
+    Parameters:
+    - game_state (dict): The current game state containing the field and coin information.
+    Returns:
+    - objective: The objective for the agent, which can be a crate or a coin.
+    """
+    #DETERMINISTIC. NOT VERY USEFUL FOR LEARNING
+
+    field = game_state['field'].copy()
+    coin_array=game_state['coins'].copy()
+    player_pos = game_state['self'][3]
+
+    #to be made better so that it chooses the nearest objective instead of the 
+    #first in the possible objectives.
+    if not coin_array:
+        crates = np.argwhere(field == 1)
+        if not np.any(crates):
+            #no crates in the field. Set new objetcive to the nearest opponent.
+            opponents = game_state['others']
+            if opponents:
+                objective = opponents[0][3]
+            else:
+                #no objective. Go to the center of the field to have highest vision.
+                objective = (0,0)
+        else:
+            #no coins in the field. Set new objetcive to the nearest crate.
+            objective = crates[0]
+    else:
+        #there are coins. Set new objetcive to the nearest coin.
+        objective = coin_array[0]
+    
+    return tuple(objective)
+
 
 def bomb_map(self, game_state: dict)->np.ndarray:
     
@@ -40,6 +78,7 @@ def bomb_map(self, game_state: dict)->np.ndarray:
         for tile in affected_tiles_up:
             if field[tile] == -1:
                 break
+            timer_tile = bomb_map[tile] 
             bomb_map[tile] = bomb_timer 
             # bomb_map[tile] = bomb_timer if (timer_tile > bomb_timer) else timer_tile
 
@@ -113,15 +152,16 @@ def agent_vision(self, field: np.ndarray, player_pos: tuple, radius: int = 3):
     vision = np.zeros((2*radius+1, 2*radius+1))    
 
     left = player_pos[0] - radius
-    right = player_pos[0] + radius 
+    right = player_pos[0] + radius  
     up = player_pos[1] - radius
-    down = player_pos[1] + radius
+    down = player_pos[1] + radius 
 
-    for i in range(left, right+1):
-        for j in range(up, down+1):
-            if i < 0 or i >= field.shape[0] or j < 0 or j >= field.shape[1]:
-                vision[i-left, j-up] = -1
+    for i in range(2*radius+1):
+        for j in range(2*radius+1):
+            if (left + i)< 0 or (left + i) >= field.shape[0]-1 or up+j < 0 or up+j >= field.shape[1]-1:
+                vision[i,j ] = -1
+                
             else:
-                vision[i-left, j-up] = field[i, j]
+                vision[i, j ] = field[left+i,up+j]
 
     return vision

@@ -493,9 +493,6 @@ class BombeRLeWorld(GenericWorld):
         # Send final event to agents that expect them
         for a in self.agents:
             if a.train:
-                #custom event
-                if self.step < s.MAX_STEPS:
-                    a.add_event(e.COLLECTED_EVERYTHING)
                 a.round_ended()
 
         # Save course of the game for future replay

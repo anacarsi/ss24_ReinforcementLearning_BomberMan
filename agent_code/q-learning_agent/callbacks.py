@@ -23,7 +23,7 @@ def setup(self):
     """
 
     #HYPERPARAMETERS
-    hyp.training_hyperparameters(self)
+    hyp.playing_hyperparameters(self)
 
     
     self.logger.info("Loading q-table from saved state.")
@@ -50,13 +50,14 @@ def act(self, game_state: dict) -> str:
 
     vision1 = a.agent_vision(self, field, game_state['self'][3], hyp.VISION_RANGE)
     vision2 = a.agent_vision(self, explosions, game_state['self'][3], hyp.VISION_RANGE)
-
     self.state = (vision1.tobytes(), vision2.tobytes(), can_place_bomb)
     
 
     #epsilon-greedy strategy
     if np.random.random() > self.epsilon:
-        action = np.argmax(self.q_table.get(self.state, [-10] * 6))
+        if not self.state in self.q_table:
+            self.q_table[self.state] = [-10] * 6
+        action = np.argmax(self.q_table[self.state])
     else:
         action = np.random.randint(0, 6)
     self.action = action 

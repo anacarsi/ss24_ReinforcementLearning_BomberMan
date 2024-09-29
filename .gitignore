@@ -1,0 +1,4 @@
+logs/game.log
+*.pickle
+*.txt
+__pycache__/

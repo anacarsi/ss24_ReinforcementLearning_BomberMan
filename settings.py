@@ -34,18 +34,17 @@ SCENARIOS = {
 
     #custom
     "1_goal": {
-        "CRATE_DENSITY": 0.2,
-        "COIN_COUNT": 4
+        "CRATE_DENSITY": 0, 
+        "COIN_COUNT": 5
     },
 }
-
 
 # Agent properties
 # default 4
 MAX_AGENTS = 1
 
 # Round properties
-MAX_STEPS = 1000
+MAX_STEPS = 400
 
 # GUI properties
 GRID_SIZE = 30
