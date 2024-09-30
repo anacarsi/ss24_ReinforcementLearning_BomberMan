@@ -5,6 +5,7 @@ import pickle
 from typing import List
 import events as e
 from .callbacks import state_to_features, Features, is_move_safe, convert_to_hashable
+import csv
 
 # Define a namedtuple for transitions (state, action, next_state, reward)
 Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
@@ -34,6 +35,15 @@ def setup_training(self):
     self.min_reward_eps = 100000            # Minimum value of episode until now
     self.max_reward_eps = -100000           # Maximum value of episode until now
     self.replay_data = []                   # Store the replay data for training
+    self.epsilons = []
+
+def write_epsilons(epsilons: list, filename='epsilons.csv'):
+    with open(filename, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Step', 'Epsilon'])  # Header
+        for step, epsilon in enumerate(epsilons):
+            writer.writerow([step, epsilon])
+
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     """
@@ -151,6 +161,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # Update the Q-table with the new Q-value for the state-action pair
     current_q_values[self.action] = new_q_value
     self.q_table[old_state] = current_q_values
+    
 
     # ------------------- SAVE EXPERIENCE FOR REPLAY -------------------
     # Append the experience to the replay buffer
@@ -212,16 +223,24 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     if self.eps % 1000 == 0:
         with open("q_table.pickle", "wb") as file:
             pickle.dump(self.q_table, file)
-
+    
     # Decrease exploration rate every 100 episodes
     if self.eps % 100 == 0:
+        # print(f"Current epsilon: {self.epsilon}")
         self.epsilon = max(EPSILON_MIN, self.epsilon * EPSILON_DECAY)
-
+        # print(f"Later epsilon: {self.epsilon}")
+        
+    self.epsilons.append(self.epsilon)
+    
     if self.eps % 10000 == 0:
         self.epsilon = 0.3
+        
+    if self.eps % 100 == 0:
+        write_epsilons(self.epsilons, 'epsilons.csv')
 
     save_replay(self.replay_data)
     self.replay_data.clear()  # Clear for next episode
+
 
 def save_replay(replay_data, filename="replay.json"):
     """

@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 import networkx as nx
 from typing import NamedTuple
+import csv
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, parent_dir)
@@ -22,6 +23,10 @@ def setup(self):
     self.logger.info("Model initialized")
     load_model(self)
     self.logger.info("Model loaded")
+    self.exploration_count = 0
+    self.exploitation_count = 0
+    self.step_count = 0
+    self.action_counts = {}
 
 def get_dir() -> str:
         return os.path.dirname(__file__)
@@ -344,27 +349,45 @@ def act(self, game_state: dict) -> str:
     # Hashable state for Q-table lookup
     hashed_state = tuple(self.state)
 
+    self.step_count += 1
+
     # Epsilon-greedy policy for action selection
     if np.random.random() > self.epsilon:
         if hashed_state in self.q_table:
             action = np.argmax(self.q_table[hashed_state])
+            self.exploitation_count += 1
         else:
             action = np.random.randint(0, len(ACTIONS))  # Explore
+            self.exploration_count += 1
     else:
         action = np.random.randint(0, len(ACTIONS))  # Explore
+        self.exploration_count += 1
 
     if action == 5 and not features.can_place_bomb or is_in_dead_end(game_state, game_state['self'][3][0], game_state['self'][3][1]):
         action = np.random.randint(0, 3)
 
-    # Set the current action for later use
-    # print(f"Choosing action: {ACTIONS[action]}")
+    self.action_counts[ACTIONS[action]] = self.action_counts.get(ACTIONS[action], 0) + 1
+    save_action_distribution(self, filename='action_distribution.csv')
+    save_exploration_data(self, filename='exploration_data.csv')
     self.action = action
     self.logger.info(f"Choosing action: {ACTIONS[action]}")
 
     # Return the action corresponding to the chosen index
     return ACTIONS[action]
 
-
+def save_exploration_data(self, filename='exploration_data.csv'):
+    with open(filename, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Step', 'Exploration', 'Exploitation'])
+        writer.writerow([self.step_count, self.exploration_count, self.exploitation_count])
+        
+def save_action_distribution(self, filename='action_distribution.csv'):
+    action_counts = {action: self.action_counts.get(action, 0) for action in ACTIONS}
+    
+    with open(filename, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Step'] + ACTIONS)
+        writer.writerow([self.step_count] + [action_counts[action] for action in ACTIONS])
 
 """
 def apply_mutations_to_action(x_flip, y_flip, transpose, action):
