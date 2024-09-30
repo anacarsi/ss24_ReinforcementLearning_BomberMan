@@ -29,6 +29,8 @@ The agent operates in a discrete step environment where it can perform actions s
 Our first agent (deep q-learning) presented for our project can be found in branch qdeepleaning -> agent_code/DALBomber/
 Our second agent (q-learning) presented four our project can be found in branch qlearning -> agent_code/my_agent/
 
+The Q-table of our q-learning agents can be found on: https://heibox.uni-heidelberg.de/d/57a78fe6abda48378ec6/. Additional files to reproduce graphs as well.
+
 ### Key Features
 
 - Efficient navigation to collect coins.
