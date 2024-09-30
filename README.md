@@ -8,7 +8,7 @@ Repository for the implementation of a reinforcement learning agent for the game
 
 ## Project Description
 
-This project implements two reinforcement learning agents for the classic Bomberman game. The agent is designed to navigate the game board, collect coins, and compete against other agents using various strategies. The goal is to develop an intelligent agent that can adapt to different game scenarios and outperform its opponents.
+This project implements two reinforcement learning agents for the classic Bomberman game. The agent is designed to navigate the game board, collect coins, and compete against other agents. The goal is to develop an intelligent agent that can adapt to different game scenarios (specified in settings.py) and outperform its opponents.
 
 ## Table of Contents
 
