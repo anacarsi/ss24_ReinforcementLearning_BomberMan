@@ -26,6 +26,9 @@ This project implements two reinforcement learning agents for the classic Bomber
 
 The agent operates in a discrete step environment where it can perform actions such as moving, dropping bombs, or waiting. The agent learns through reinforcement learning techniques, adapting its strategy based on the game state and feedback from the environment.
 
+Our first agent (deep q-learning) presented for our project can be found in branch qdeepleaning -> agent_code/DALBomber/
+Our second agent (q-learning) presented four our project can be found in branch qlearning -> agent_code/my_agent/
+
 ### Key Features
 
 - Efficient navigation to collect coins.
@@ -38,6 +41,7 @@ The agent interacts with the game environment through a series of callbacks. The
 
 - `setup(self)`: Initializes the agent before the first round.
 - `act(self, game_state)`: Determines the best action based on the current game state.
+- `state_to_features(self, game_state)`: Creates a feature vector for our state representation. Different implementations have been discussed in our final report.
 
 ### Event Logging
 
@@ -52,7 +56,7 @@ To run the project, use the following command line instructions:
 python main.py play
 
 # To run in training mode
-python main.py train
+python main.py my_agent --train 1 --n-rounds 10000
 
 # To save a replay of the game
 python main.py replay <stored-replay>
