@@ -7,8 +7,8 @@ from fallbacks import pygame
 # board size (a smaller board may be useful at the beginning)
 # COLS = 17
 # ROWS = 17
-COLS = 7
-ROWS = 7
+COLS = 6
+ROWS = 6
 SCENARIOS = {
     # modes useful for agent development
 	"empty": {
@@ -35,6 +35,10 @@ SCENARIOS = {
     #custom
     "1_goal": {
         "CRATE_DENSITY": 0, 
+        "COIN_COUNT": 5
+    },
+    "cratescoins": {
+        "CRATE_DENSITY": 0.2, 
         "COIN_COUNT": 5
     },
 }

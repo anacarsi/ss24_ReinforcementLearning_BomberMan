@@ -23,13 +23,13 @@ def setup(self):
     """
 
     #HYPERPARAMETERS
-    hyp.playing_hyperparameters(self)
+    hyp.training_hyperparameters(self)
 
     
     self.logger.info("Loading q-table from saved state.")
     #we open it if it id not empty, otherwise we create it as empty and then random initialize it
-    if os.path.isfile("q_table.pickle"):
-        with open("q_table.pickle", "rb") as file:
+    if os.path.isfile("6x6cratescoinsQTABLE.pickle"):
+        with open("6x6cratescoinsQTABLE.pickle", "rb") as file:
             self.q_table = pickle_load(file)
     else:
         self.q_table = {}
@@ -43,15 +43,16 @@ def act(self, game_state: dict) -> str:
     :param game_state: The dictionary that describes everything on the board.
     :return: The action to take as a string.
     """
+
+
     field = a.build_field(self, game_state)
     can_place_bomb = game_state['self'][2]
 
     explosions = a.bomb_map(self, game_state)
-
     vision1 = a.agent_vision(self, field, game_state['self'][3], hyp.VISION_RANGE)
     vision2 = a.agent_vision(self, explosions, game_state['self'][3], hyp.VISION_RANGE)
-    self.state = (vision1.tobytes(), vision2.tobytes(), can_place_bomb)
     
+    self.state = (vision1.tobytes(), vision2.tobytes(), can_place_bomb)
 
     #epsilon-greedy strategy
     if np.random.random() > self.epsilon:

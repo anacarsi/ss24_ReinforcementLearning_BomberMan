@@ -1,36 +1,16 @@
-2024-09-29 20:51:49,940 [BombeRLeWorld] INFO: Initializing game world
-2024-09-29 20:51:50,627 [BombeRLeWorld] INFO: STARTING ROUND #1
-2024-09-29 20:52:19,009 [BombeRLeWorld] INFO: STARTING STEP 1
-2024-09-29 20:52:19,010 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action DOWN in 0.00s.
-2024-09-29 20:52:19,010 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
-2024-09-29 20:52:37,177 [BombeRLeWorld] INFO: STARTING STEP 2
-2024-09-29 20:52:37,178 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action DOWN in 0.00s.
-2024-09-29 20:52:37,179 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
-2024-09-29 20:52:58,082 [BombeRLeWorld] INFO: STARTING STEP 3
-2024-09-29 20:52:58,083 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action RIGHT in 0.00s.
-2024-09-29 20:52:58,083 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
-2024-09-29 20:52:58,083 [BombeRLeWorld] INFO: Agent <q-learning_agent> picked up coin at (2, 3) and receives 1 point
-2024-09-29 20:53:18,380 [BombeRLeWorld] INFO: STARTING STEP 4
-2024-09-29 20:53:18,380 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action RIGHT in 0.00s.
-2024-09-29 20:53:18,380 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
-2024-09-29 20:53:18,380 [BombeRLeWorld] INFO: Agent <q-learning_agent> picked up coin at (3, 3) and receives 1 point
-2024-09-29 20:53:33,528 [BombeRLeWorld] INFO: STARTING STEP 5
-2024-09-29 20:53:33,529 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action DOWN in 0.00s.
-2024-09-29 20:53:33,529 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
-2024-09-29 20:53:33,529 [BombeRLeWorld] INFO: Agent <q-learning_agent> picked up coin at (3, 4) and receives 1 point
-2024-09-29 20:54:15,441 [BombeRLeWorld] INFO: STARTING STEP 6
-2024-09-29 20:54:15,442 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action DOWN in 0.00s.
-2024-09-29 20:54:15,442 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
-2024-09-29 20:54:44,325 [BombeRLeWorld] INFO: STARTING STEP 7
-2024-09-29 20:54:44,325 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action RIGHT in 0.00s.
-2024-09-29 20:54:44,326 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
-2024-09-29 20:54:44,326 [BombeRLeWorld] INFO: Agent <q-learning_agent> picked up coin at (4, 5) and receives 1 point
-2024-09-29 20:55:07,047 [BombeRLeWorld] INFO: STARTING STEP 8
-2024-09-29 20:55:07,047 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action RIGHT in 0.00s.
-2024-09-29 20:55:07,047 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
-2024-09-29 20:55:34,918 [BombeRLeWorld] INFO: STARTING STEP 9
-2024-09-29 20:55:34,919 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action UP in 0.00s.
-2024-09-29 20:55:34,919 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
-2024-09-29 20:55:34,919 [BombeRLeWorld] INFO: Agent <q-learning_agent> picked up coin at (5, 4) and receives 1 point
-2024-09-29 20:55:34,920 [BombeRLeWorld] INFO: One agent left alive with nothing to do, wrap up round
-2024-09-29 20:55:34,920 [BombeRLeWorld] INFO: WRAPPING UP ROUND #1
+2024-09-30 15:16:30,077 [BombeRLeWorld] INFO: Initializing game world
+2024-09-30 15:16:32,581 [BombeRLeWorld] INFO: STARTING ROUND #1
+2024-09-30 15:16:33,194 [BombeRLeWorld] INFO: STARTING STEP 1
+2024-09-30 15:16:33,197 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action LEFT in 0.00s.
+2024-09-30 15:16:33,198 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
+2024-09-30 15:16:33,497 [BombeRLeWorld] INFO: STARTING STEP 2
+2024-09-30 15:16:33,498 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action LEFT in 0.00s.
+2024-09-30 15:16:33,498 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
+2024-09-30 15:16:33,498 [BombeRLeWorld] INFO: Agent <q-learning_agent> picked up coin at (2, 1) and receives 1 point
+2024-09-30 15:16:33,698 [BombeRLeWorld] INFO: STARTING STEP 3
+2024-09-30 15:16:33,699 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action WAIT in 0.00s.
+2024-09-30 15:16:33,699 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
+2024-09-30 15:16:33,801 [BombeRLeWorld] INFO: STARTING STEP 4
+2024-09-30 15:16:33,802 [BombeRLeWorld] INFO: Agent <q-learning_agent> chose action LEFT in 0.00s.
+2024-09-30 15:16:33,802 [BombeRLeWorld] INFO: Agent <q-learning_agent> stayed within acceptable think time.
+2024-09-30 15:16:33,802 [BombeRLeWorld] INFO: Agent <q-learning_agent> picked up coin at (1, 1) and receives 1 point

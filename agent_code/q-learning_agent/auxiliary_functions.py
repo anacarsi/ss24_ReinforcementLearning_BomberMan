@@ -3,21 +3,17 @@ import networkx as nx
 
 def set_objetive(self, game_state: dict):
     """
-    TO BE MADE BETTER SO THAT IT CHOOSES THE NEAREST OBJECTIVE.
+    DETERMINISTIC. DISCARDED.
     Sets the objective for the agent based on the game state.
     Parameters:
     - game_state (dict): The current game state containing the field and coin information.
     Returns:
     - objective: The objective for the agent, which can be a crate or a coin.
     """
-    #DETERMINISTIC. NOT VERY USEFUL FOR LEARNING
-
     field = game_state['field'].copy()
     coin_array=game_state['coins'].copy()
     player_pos = game_state['self'][3]
 
-    #to be made better so that it chooses the nearest objective instead of the 
-    #first in the possible objectives.
     if not coin_array:
         crates = np.argwhere(field == 1)
         if not np.any(crates):
@@ -52,11 +48,11 @@ def bomb_map(self, game_state: dict)->np.ndarray:
     The timer value of a tile is updated if a bomb with a shorter timer is found.
     The bomb map is returned as a 2D array.
     """
-    field = game_state['field'].copy()
+    field = game_state['field']
 
     #adjust size of the bomb map to the field size
     bomb_map = np.full((self.rows,self.cols), -1)
-    bombs = game_state['bombs'].copy()
+    bombs = game_state['bombs']
     
     for bomb in bombs:
         bomb_center_x, bomb_center_y = bomb[0][0], bomb[0][1]
@@ -100,7 +96,7 @@ def bomb_map(self, game_state: dict)->np.ndarray:
             timer_tile = bomb_map[tile]
             bomb_map[tile] = bomb_timer #if (timer_tile > bomb_timer) else timer_tile
 
-    explosion_map = game_state['explosion_map'].copy()
+    explosion_map = game_state['explosion_map']
 
     bomb_map[explosion_map == 1] = 1
     return bomb_map
@@ -118,16 +114,16 @@ def build_field(self, game_state: dict):
     bombs to 2, and free spaces to 0.
     The function returns the built game field.
     """
-    field = game_state['field'].copy()
+    field = game_state['field']
     
-    for (coords, value) in game_state['bombs'].copy():
+    for (coords, value) in game_state['bombs']:
         field[coords] = 2  
 
-    coin_map = game_state['coins'].copy()
+    coin_map = game_state['coins']
     for coin in coin_map:
         field[coin] = 3
 
-    oppponents = game_state['others'].copy()
+    oppponents = game_state['others']
     for opp in oppponents:
         field[opp[3]] = 4
     
@@ -155,7 +151,6 @@ def agent_vision(self, field: np.ndarray, player_pos: tuple, radius: int = 3):
     right = player_pos[0] + radius  
     up = player_pos[1] - radius
     down = player_pos[1] + radius 
-
     for i in range(2*radius+1):
         for j in range(2*radius+1):
             if (left + i)< 0 or (left + i) >= field.shape[0]-1 or up+j < 0 or up+j >= field.shape[1]-1:
@@ -165,3 +160,39 @@ def agent_vision(self, field: np.ndarray, player_pos: tuple, radius: int = 3):
                 vision[i, j ] = field[left+i,up+j]
 
     return vision
+
+
+#dicarded, leaded to deterministic behaviour
+def dijkstra(player_pos, objective_pos, field):
+    """
+    Calculates the path to the objective using Dijkstra's algorithm.
+    Returns the path to the coin.
+    """
+    # Create a grid of ones and zeros
+    # 0 represents a wall, 1 represents a free space
+    grid = np.zeros(field.shape)
+    grid[field == -1] = 0 # Wall (not passable)
+    grid[field == -2] = 1  # Crate (not passable)
+    #to afjust when we change size of the field
+    grid[field == 0] = 1
+    grid[field == 1] = 1
+    grid[field == 2] = 1
+    grid[field == 3] = 1
+    grid[field == 4] = 1
+    grid[field == -3] = 1
+    # Create a graph from the grid
+    graph = nx.grid_2d_graph(grid.shape[0], grid.shape[1])
+    # Remove nodes that represent walls
+    walls = np.argwhere(grid == 0)
+    for wall in walls:
+        graph.remove_node(tuple(wall))
+    # Find the start node
+    start = tuple(player_pos)
+    # Find the path to the coin
+    try:
+        path = nx.shortest_path(graph, start, tuple(objective_pos), method='dijkstra')
+    except nx.NetworkXNoPath:
+        # No path found to this coin
+        path = []
+
+    return path
