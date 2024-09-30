@@ -1,0 +1,1 @@
+python main.py play --agents forth_agent forth_agent rule_based_agent  rule_based_agent --train 1 --scenario loot-crate --n-rounds 100000 --no-gui

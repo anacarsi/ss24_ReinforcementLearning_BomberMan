@@ -1,0 +1,1 @@
+python main.py play --scenario loot-crate --agents forth_agent coin_collector_agent forth_agent forth_agent --n-rounds 100000 --train 1 --no-gui

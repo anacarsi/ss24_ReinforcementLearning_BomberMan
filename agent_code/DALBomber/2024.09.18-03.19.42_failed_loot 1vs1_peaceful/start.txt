@@ -1,0 +1,2 @@
+python main.py play --scenario loot-crate --agents forth_agent peaceful_agent --n-rounds 50000 --train 1 --no-gui --single-process
+loot 1vs1_peaceful

@@ -1,0 +1,9 @@
+snapshot*
+loss_histo*
+finished_train*
+model.pth
+score_hist*
+model*
+*.pth
+
+

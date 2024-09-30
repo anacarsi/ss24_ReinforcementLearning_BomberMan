@@ -1,0 +1,22 @@
+python main.py play --train 1 --agents DALBomber_test --scenario coin-heaven --no-gui --n-rounds 1000000 --single-process
+ 3%|█▊                                                                   | 26762/1000000 [2:14:32<81:32:55,  3.32it/s]^C
+
+
+inverse temp 50
+softmax for train, argmax for eval
+
+history 500k, 150k req ,
+Prio enabled, ALPHA = 0.6
+BETA = 1
+
+2k batch size (2000 / 400) = 5 , a bit more if shorter rounds
+gamma 0.97
+epsilon 0.4
+lr_init = 1e-3
+
+decay:
+trained % 1000 = 999:
+epsilon = max(0.001, epsilon * 0.5 )
+lr: 0.5
+
+bomb_place_incentive enabled

@@ -1,1 +1,0 @@
-python main.py play --agents forth_agent rule_based_agent  --single-process --no-gui --train 1 --n-rounds 200000 --scenario aprox-endgame

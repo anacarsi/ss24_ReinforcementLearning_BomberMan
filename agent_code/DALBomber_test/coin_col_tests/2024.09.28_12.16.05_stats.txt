@@ -1,0 +1,1 @@
+python main.py play --scenario coin-heaven --agents DALBomber_test --n-rounds 500 --train 0 --continue-without-training --no-gui --save-stats --single-process

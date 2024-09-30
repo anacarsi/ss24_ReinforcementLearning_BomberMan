@@ -5,4 +5,4 @@ model.pth
 score_hist*
 model*
 *.pth
-*.npy
+

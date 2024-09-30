@@ -1,1 +1,0 @@
-2024-09-16 02:20:51,787 [forth_agent_0_code] INFO: trained at: 17000, 7 428903 epsilon down to: 0.01 lr at 1.8530201888518422e-05

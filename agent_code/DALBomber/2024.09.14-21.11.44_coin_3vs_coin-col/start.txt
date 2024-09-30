@@ -1,0 +1,3 @@
+python main.py play --scenario coin-heaven --agents forth_agent coin_collector_agent forth_agent forth_agent --n-rounds 100000 --train 1 --no-gui
+
+coin 3vs_coin-col
